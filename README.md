@@ -29,12 +29,15 @@ Para instalar librerias .zip de Arduino, instalar ```sudo apt install wget unzip
 
 ```bash
 LIBRARY_ZIP_URL="https://github.com/terryjmyers/PWM/archive/refs/heads/master.zip"
-LIBRARY_OUT_FILE="~/pwm.zip"
+LIBRARY_OUT_FILE="$HOME/pwm.zip"
 LIBRARY_NAME="PWM"
 
-wget "$LIBRARY_ZIP_URL" -O "$LIBRARY_OUT_FILE"
-unzip "$LIBRARY_OUT_FILE" -d "~/Arduino/libraries/$LIBRARY_NAME"
-rm $LIBRARY_OUT_FILE
+if [ ! -d "$HOME/Arduino/libraries/$LIBRARY_NAME" ]; then
+    mkdir "$HOME/Arduino/libraries/$LIBRARY_NAME"
+fi
+wget "$LIBRARY_ZIP_URL" -O "LIBRARY_OUT_FILE"
+unzip "LIBRARY_OUT_FILE" -d "$HOME/Arduino/libraries/$LIBRARY_NAME"
+rm "LIBRARY_OUT_FILE"
 ```
 
 Para buscar librerías que están en el library manager de Arduino se debe correr el comando ```arduino-cli lib search <nombre de libraría>```. Luego estas se pueden instalar con el comando ```arduino-cli lib install <nombre de libraría>```. En particular, para este proyecto se debe correr el siguiente comando
