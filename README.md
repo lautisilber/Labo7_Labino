@@ -41,7 +41,7 @@ unzip "LIBRARY_OUT_FILE" -d "$HOME/Arduino/libraries/$LIBRARY_NAME"
 rm "LIBRARY_OUT_FILE"
 
 # esto hay que hacerlo por como esta armado el archivo zip
-mv "$HOME/Arduino/libraries/$LIBRARY_NAME/$LIBRARY_NAME-master/*" "$HOME/Arduino/libraries/$LIBRARY_NAME"
+mv $HOME/Arduino/libraries/$LIBRARY_NAME/"$LIBRARY_NAME"-master/* $HOME/Arduino/libraries/"$LIBRARY_NAME"
 rmdir "$HOME/Arduino/libraries/$LIBRARY_NAME/$LIBRARY_NAME-master"
 ```
 
