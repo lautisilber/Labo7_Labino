@@ -75,3 +75,18 @@ Ahora podemos cargar el programa compilado a la tarjeta con el siguiente comando
 ```bash
 arduino-cli upload --fqbn $FQBN -p /dev/ttyUSB0
 ```
+
+## API
+
+La API del programa consiste en comandos terminados por un caracter de nueva línea ```\n```. Los comandos se envían al puerto serial del Arduino (baudrate de 9600). Los comandos pueden llevar argumentos separados por un caracter de espacio.
+
+|Comando|Argumento 1|Argumento 2|Argumento 3|Respuesta|
+|---|---|---|---|---|
+|```hx```|```<int:indice>``` (opcional)|-|-|Si se proporciona el argumento indice, devuelve un int con el valor de la balanza correspondiente al indice. Si no se proporcionan argumentos, se devolverá una lista con todos los valores de acda balanza, en orden (```[valor1, valor2, valor3, ...]```)|
+|```dht```|-|-|-|Devuelve los datos del DHT en formato JSON (```{"hum":12.34,"temp":56.78}```)|
+|```water```|```<int:indice>```|```<int:tiempo>```|```<int:intensidad>```|Riega en la posición correspondiente con el indice, durante el tiempo especificado en tiempo (en milisegundos), con la intensidad de la bomba especificada en intensidad (intensidad va de 1% a 100% de la potencia total). Devuelve el texto "OK"|
+|```stepper```|```<int:indice>``` (opcional)|-|-|Si se proporciona el argumento indice, lleva el stepper a la posición correspondiente a la posición del índice nidicado. Con o sin argumentos, devuelve la posición en pasos en que se encuentra el stepper como un número entero|
+|```servo```|```<int:angulo>```(opcional)|-|-|Similar a ```stepper```. Si se proporciona un ángulo, lleva el servo a dicho ángulo. En cualquier caso devuelve el ángulo final en el que se encuentra el servo como un número entero|
+|```stepper_raw```|```<int:paso>```|-|-|Lleva el stepper al paso indicado en el argumento. Devuelve el paso en el que se encuentra el stepper al final (debería coincidir con el argumento)|
+
+
