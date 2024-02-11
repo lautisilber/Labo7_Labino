@@ -82,7 +82,7 @@ arduino-cli board list
 Ahora podemos cargar el programa compilado a la tarjeta con el siguiente comando, donde ```/dev/ttyUSB0``` es el puerto serial al que está conectada la tarjeta
 
 ```bash
-arduino-cli upload --fqbn $FQBN -p /dev/ttyUSB0
+arduino-cli upload --fqbn $FQBN -p /dev/ttyUSB0 .
 ```
 
 ## API
@@ -97,5 +97,6 @@ La API del programa consiste en comandos terminados por un caracter de nueva lí
 |```stepper```|```<int:indice>``` (opcional)|-|-|Si se proporciona el argumento indice, lleva el stepper a la posición correspondiente a la posición del índice nidicado. Con o sin argumentos, devuelve la posición en pasos en que se encuentra el stepper como un número entero|
 |```servo```|```<int:angulo>```(opcional)|-|-|Similar a ```stepper```. Si se proporciona un ángulo, lleva el servo a dicho ángulo. En cualquier caso devuelve el ángulo final en el que se encuentra el servo como un número entero|
 |```stepper_raw```|```<int:paso>```|-|-|Lleva el stepper al paso indicado en el argumento. Devuelve el paso en el que se encuentra el stepper al final (debería coincidir con el argumento)|
+|```hello```|-|-|-|Responde "OK". Para probar conexión|
 
 
