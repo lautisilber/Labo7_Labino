@@ -6,7 +6,7 @@ Para instalar la herramienta de comandos de Arduino, correr el siguiente comando
 
 ```bash
 ARDUINO_DIR="~/Arduino"
-if [ -d "$ARDUINO_DIR" ]; then
+if [ ! -d "$ARDUINO_DIR" ]; then
     mkdir ~/Arduino
 fi
 curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$ARDUINO_DIR sh
