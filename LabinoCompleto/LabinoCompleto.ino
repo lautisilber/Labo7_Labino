@@ -10,9 +10,10 @@
 
 // pins
 const byte sckPin = 2;
-const byte dataPins[] = {5, 6, 7, 8, 9};
+const byte dataPins[] = {2, 5, 6, 12, 13};
 const byte dhtPin = 4;
-const byte driverPins[4] = {9, 10, 11, 12}; // in1, in2, in3, in4
+const byte driverPins[4] = {8, 9, 10, 11}; // in1, in2, in3, in4
+const byte servoPin = 7;
 const byte pumpPin = 3;
 const Position pumpPos[] = {{2048, true}, {2048, false}, {4096, true}, {4096, false}};
 
@@ -22,8 +23,6 @@ const size_t nPosiciones = ARR_LEN(pumpPos);
 
 #define DHT_TYPE DHT22
 DHT dht(dhtPin, DHT_TYPE);
-
-#define N_MACETAS nBalanzas
 
 MultipleHX711<nBalanzas, uint8_t> hx711(sckPin, dataPins);
 
@@ -35,32 +34,64 @@ PumpManager<nPosiciones> pump(
     5000, 15, percent2dutyCycleI(75) // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
 );
 
+bool smartAtoi(long int *i, const char *charr)
+{
+    char *endptr;
+    *i = strtol(charr, &endptr, 10);
+    return charr[0] != '\0' && *endptr == '\0';
+}
+
 void cmdUnrecognized(SerialCommands* sender, const char* cmd)
 {
-    sender->GetSerial()->print("ERROR: No se reconoce el comando \"");
+    sender->GetSerial()->print(F("ERROR: No se reconoce el comando \""));
     sender->GetSerial()->print(cmd);
-    sender->GetSerial()->println('"');
+    sender->GetSerial()->println(F("\""));
 }
 
 void cmdBalanza(SerialCommands* sender)
 {
-    // cmd: hx <int:index>
-    // respuesta: 12
-    // devuelve los datos de la balanza indice
+    // cmd: hx ?<int:index>
+    // respuesta: 12 (si hay index); [12,34,56,78,...] (si no hay index)
+    // devuelve los datos de la balanza
 
     char* index_str = sender->Next();
     if (index_str == NULL)
     {
-        sender->GetSerial()->println("ERROR: No es especifico ningun indice");
+        // devuelve todas las balanzas
+        long values[nBalanzas];
+        hx711.readAll(values);
+        if (hx711.error())
+        {
+            hx711.printError(sender->GetSerial());
+            return;
+        }
+        for (size_t i = 0; i < nBalanzas; i++)
+        {
+            sender->GetSerial()->print('[');
+            sender->GetSerial()->print(values[i]);
+            if (i < nBalanzas-1)
+                sender->GetSerial()->print(',');
+            else
+                sender->GetSerial()->println(']');
+        }
         return;
     }
 
-    int index = atoi(index_str);
-    if (index < 0 || index >= nBalanzas)
+    long int index;
+    bool isInt = smartAtoi(&index, index_str);
+    if (!isInt)
     {
-        sender->GetSerial()->print("ERROR: Balanza con indice ");
+        sender->GetSerial()->print(F("ERROR: El argumento no es un entero. El argumento provisto es "));
+        sender->GetSerial()->println(index_str);
+        return;
+    }
+    else if (index < 0 || index >= nBalanzas)
+    {
+        sender->GetSerial()->print(F("ERROR: Balanza con indice "));
         sender->GetSerial()->print(index);
-        sender->GetSerial()->println(" no existe");
+        sender->GetSerial()->print(F(" no existe. El indice debe estar entre 0 y "));
+        sender->GetSerial()->println(nBalanzas);
+        return;
     }
 
     long value = hx711.read(index);
@@ -68,24 +99,6 @@ void cmdBalanza(SerialCommands* sender)
         hx711.printError(sender->GetSerial());
     else
         sender->GetSerial()->println(value);
-}
-
-void cmdBalanzas(SerialCommands* sender)
-{
-    // cmd: hxs
-    // respuesta: [12,34,56,78,...]
-    // devuelve los datos de todas las balanzas
-
-    for (size_t i = 0; i < nBalanzas; i++)
-    {
-        int value = 0; // completar aca con el valor de la balanza i
-        sender->GetSerial()->print('[');
-        sender->GetSerial()->print(value);
-        if (i < nBalanzas-1)
-            sender->GetSerial()->print(',');
-        else
-            sender->GetSerial()->println(']');
-    }
 }
 
 void cmdDHT(SerialCommands* sender)
@@ -97,11 +110,11 @@ void cmdDHT(SerialCommands* sender)
     float hum = dht.readHumidity();
     float temp = dht.readTemperature();
 
-    sender->GetSerial()->print("{\"hum\":");
+    sender->GetSerial()->print(F("{\"hum\":"));
     sender->GetSerial()->print(hum);
-    sender->GetSerial()->print(",\"temp\":");
+    sender->GetSerial()->print(F(",\"temp\":"));
     sender->GetSerial()->print(temp);
-    sender->GetSerial()->println('}');
+    sender->GetSerial()->println(F("}"));
 }
 
 void cmdRegar(SerialCommands* sender)
@@ -115,32 +128,45 @@ void cmdRegar(SerialCommands* sender)
     char* intensidad_str = sender->Next();
     if (index_str == NULL || tiempo_str == NULL || intensidad_str == NULL)
     {
-        sender->GetSerial()->println("ERROR: Los parametros no se especificaron bien");
+        sender->GetSerial()->println(F("ERROR: Los argumentos no se especificaron bien"));
         return;
     }
 
-    int index = atoi(index_str);
-    int tiempo = atoi(tiempo_str); // en ms
-    int intensidad = atoi(intensidad_str); // 0-100
-    if (index < 0 || index >= N_MACETAS)
+    long int index, tiempo, intensidad;
+    bool isIntIndex = smartAtoi(&index, index_str);
+    bool isIntTiempo = smartAtoi(&index, tiempo_str); // en ms
+    bool isIntIntensidad = smartAtoi(&index, intensidad_str); // 0-100
+    if (!(isIntIndex && isIntTiempo && isIntIntensidad))
     {
-        sender->GetSerial()->print("ERROR: El indice de maceta ");
+        sender->GetSerial()->print(F("ERROR: Alguno de los argumentos no es un numero entero. Los argumentos recibidos son, en orden, "));
         sender->GetSerial()->print(index);
-        sender->GetSerial()->println(" no es aceptable");
+        sender->GetSerial()->print(F(", "));
+        sender->GetSerial()->print(tiempo);
+        sender->GetSerial()->print(F(", "));
+        sender->GetSerial()->println(intensidad);
+        return;
+    }
+
+    if (index < 0 || index >= nBalanzas)
+    {
+        sender->GetSerial()->print(F("ERROR: El indice de maceta recibido es "));
+        sender->GetSerial()->print(index);
+        sender->GetSerial()->print(F(". Debe ser mayor o igual a 0 y menor que "));
+        sender->GetSerial()->print(nBalanzas);
         return;
     }
     if (tiempo <= 0)
     {
-        sender->GetSerial()->print("ERROR: El tiempo ");
+        sender->GetSerial()->print(F("ERROR: El tiempo recibido es "));
         sender->GetSerial()->print(tiempo);
-        sender->GetSerial()->println(" no es aceptable");
+        sender->GetSerial()->println(F(". Debe ser mayor a 0"));
         return;
     }
     if (intensidad <= 0 || intensidad > 100)
     {
-        sender->GetSerial()->print("ERROR: La intensidad PWM ");
+        sender->GetSerial()->print(F("ERROR: La intensidad PWM recibida es "));
         sender->GetSerial()->print(intensidad);
-        sender->GetSerial()->println(" no es aceptable");
+        sender->GetSerial()->println(F(". Debe ser mayor a 0 y menor o igual a 100"));
         return;
     }
 
@@ -149,38 +175,122 @@ void cmdRegar(SerialCommands* sender)
     bool res = pump.water(index, tiempo, dutyCycleU8);
 
     if (res)
-        sender->GetSerial()->println("OK");
+        sender->GetSerial()->println(F("OK"));
     else
         pump.printError(sender->GetSerial());
 }
 
 void cmdStepper(SerialCommands* sender)
 {
-    // cmd: stepper ?<int:posicion>
+    // cmd: stepper ?<int:index>
+    // respuesta: <int:posicion>
+    // Devuelve la posicion actual del stepper del sistema de riego
+    // Si se transmitio un argumento, este debe ser el indice de la posicion a la que se quiere llevar el stepper
+
+    char* index_str = sender->Next();
+    if (index_str != NULL)
+    {
+        // check if is all numbers
+        long int index;
+        bool isInt = smartAtoi(&index, index_str);
+
+        if (!isInt)
+        {
+            sender->GetSerial()->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+            sender->GetSerial()->println(index_str);
+            return;
+        }
+        else if (index < 0 || index > nPosiciones)
+        {
+            sender->GetSerial()->print(F("ERROR: El argumento es un numero menor a 0 o mayor a "));
+            sender->GetSerial()->print(nPosiciones);
+            sender->GetSerial()->print(F(". El numero del argumento es "));
+            sender->GetSerial()->println(index);
+            return;
+        }
+
+        bool success = pump.stepperGoToPosition(index);
+
+        if (!success)
+        {
+            pump.printError(sender->GetSerial());
+            return;
+        }
+    }
+
+    sender->GetSerial()->println(pump.getStepperStep());
+}
+
+void cmdServo(SerialCommands* sender)
+{
+    // cmd: servo ?<int:angulo>
+    // respuesta: <int:angulo>
+    // si se especifica un angulo, se movera el servo hasta ese angulo. en cualquier
+    // caso, devuelve el angulo final del servo
+
+    char* ang_str = sender->Next();
+    if (ang_str != NULL)
+    {
+        // check if is all numbers
+        long int angle;
+        bool isInt = smartAtoi(&angle, ang_str);
+        if (!isInt)
+        {
+            sender->GetSerial()->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+            sender->GetSerial()->println(ang_str);
+            return;
+        }
+        else if (angle >= SERVO_MIN_ANGLE && angle <= SERVO_MAX_ANGLE)
+        {
+            sender->GetSerial()->print(F("ERROR: El argumento es un numero menor a "));
+            sender->GetSerial()->print(SERVO_MIN_ANGLE);
+            sender->GetSerial()->print(F(" o mayor a "));
+            sender->GetSerial()->print(SERVO_MAX_ANGLE);
+            sender->GetSerial()->print(F(". El numero del argumento es "));
+            sender->GetSerial()->println(angle);
+            return;
+        }
+
+        pump.servoGoToAngle(angle);
+    }
+
+    sender->GetSerial()->println(pump.getServoAngle());
+}
+
+void cmdStepperRaw(SerialCommands* sender)
+{
+    // cmd: stepper_raw <int:index>
     // respuesta: <int:posicion>
     // Devuelve la posicion actual del stepper del sistema de riego
     // Si se transmitio un argumento, este debe ser uint32_t y es el paso al que se debe llevar el stepper
 
-    char* pos_str = sender->Next();
-    if (pos_str != NULL)
+    char* step_str = sender->Next();
+    if (step_str != NULL)
     {
-        // check if is all numbers
-        for (size_t i = 0; i < strlen(pos_str); i++)
-        {
-            if (!isdigit(pos_str[i]) && pos_str[i] != '0') // isdigit returns 0 if argument is not a number or if it is '0'. otherwise it returns > 0
-            {
-                sender->GetSerial()->print("ERROR: Se recibio el argumento ");
-                sender->GetSerial()->print(pos_str);
-                sender->GetSerial()->println(" para el comando [stepper], cuando este argumento solo puede ser un numero entero positivo");
-                return;
-            }
-        }
-
-        int newPos = atoi(pos_str);
-        pump.stepperGoToPosition(newPos);
+        sender->GetSerial()->println(F("ERROR: No se proporcino un argumento numerico."));
+        return;
     }
 
-    sender->GetSerial()->println(pump.getStepperPos());
+    // check if is all numbers
+    long int step;
+    bool isInt = smartAtoi(&step, step_str);
+
+    if (!isInt)
+    {
+        sender->GetSerial()->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+        sender->GetSerial()->println(step_str);
+        return;
+    }
+
+    bool success = pump.stepperGoToStep(step);
+
+    if (!success)
+    {
+        pump.printError(sender->GetSerial());
+        return;
+    }
+
+    sender->GetSerial()->println(pump.getStepperStep());
 }
 
 #define SERIAL_COMMAND_BUFFER_SIZE 32
@@ -188,23 +298,25 @@ char serialCommandBuffer[SERIAL_COMMAND_BUFFER_SIZE] = {0};
 SerialCommands serialCommands(&Serial, serialCommandBuffer, SERIAL_COMMAND_BUFFER_SIZE, "\n", " ");
 
 SerialCommand cmdBalanza_("hx", cmdBalanza);
-SerialCommand cmdBalanzas_("hxs", cmdBalanzas);
 SerialCommand cmdDHT_("dht", cmdDHT);
 SerialCommand cmdRegar_("water", cmdRegar);
 SerialCommand cmdStepper_("stepper", cmdStepper);
+SerialCommand cmdServo_("servo", cmdServo);
+SerialCommand cmdStepperRaw_("stepper_raw", cmdStepperRaw);
 
 void setup()
 {
     Serial.begin(9600);
 
-    // dht.begin();
+    dht.begin();
 
     serialCommands.SetDefaultHandler(cmdUnrecognized);
-    serialCommands.AddCommand(&cmdBalanza_);
     serialCommands.AddCommand(&cmdBalanza_);
     serialCommands.AddCommand(&cmdDHT_);
     serialCommands.AddCommand(&cmdRegar_);
     serialCommands.AddCommand(&cmdStepper_);
+    serialCommands.AddCommand(&cmdServo_);
+    serialCommands.AddCommand(&cmdStepperRaw_);
 }
 
 void loop() {

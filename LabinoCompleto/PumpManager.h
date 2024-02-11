@@ -67,7 +67,6 @@ private:
     ULN2003 _stepper;
     ServoManager _servo;
 
-    long _currStepperPos = 0; // EMPIEZA EN 0 (esto puede llegar a ser un problema...)
     Position *_positions;
     long _stepperSpeed; // ms per revolution (fastest is approx 5 s = 5000 ms)
     uint16_t _servoSpeed; // delay in ms between each angle
@@ -196,7 +195,8 @@ public:
         stream->println(_errorStr);
         memset(_errorStr, '\0', PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE);
     }
-    inline long getStepperPos() const { return _currStepperPos; }
+    inline long getStepperStep() const { return _stepper.getCurrentPosition(); }
+    inline uint8_t getServoAngle() const { return _servo.getAngle(); }
 };
 
 constexpr uint8_t percent2dutyCycleF(float percent)

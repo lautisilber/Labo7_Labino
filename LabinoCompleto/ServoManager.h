@@ -56,6 +56,8 @@ public:
         return true;
     }
     void setDelay(unsigned long delay_ms) { _delay_ms = delay_ms; }
+
+    uint8_t getAngle() const { return _angle; }
 };
 
 #endif
