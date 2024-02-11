@@ -1,6 +1,6 @@
 # Labo7_Labino
 
-##### Instalar Arduino-cli
+## Instalar Arduino-cli
 
 Para instalar la herramienta de comandos de Arduino, correr el siguiente comando
 
@@ -18,7 +18,7 @@ export PATH="$PATH:$ARDUINO_DIR" # esto agrega arduino-cli al path para poder ll
 
 Para poder ejecutar arrduino-cli facilmente en el shell, se agregó al path. Para que este cambio tome efecto, correr el comando ```source ~/.bashrc```
 
-##### Librerías
+## Librerías
 
 Librerías usadas:
 - [https://github.com/terryjmyers/PWM](https://github.com/terryjmyers/PWM)
@@ -35,7 +35,7 @@ unzip "$LIBRARY_OUT_FILE" -d "~/Arduino/libraries/$LIBRARY_NAME"
 rm $LIBRARY_OUT_FILE
 ```
 
-##### Compilado
+## Compilado
 
 Para usar arduino-cli, hay que declarar explícitamente qué tipo de tarjeta estamos usando (fqbn = fully qualified board name). Algunas fqbn comúnmente usadas son
 
