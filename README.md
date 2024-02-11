@@ -24,6 +24,7 @@ Librerías usadas:
 - [PWM - terryjmyers](https://github.com/terryjmyers/PWM)
 - [DHT - Adafruit](https://github.com/adafruit/DHT-sensor-library)
 - [SerialCommands - ppedro74](https://github.com/ppedro74/Arduino-SerialCommands)
+- [Servo - Arduino](https://github.com/arduino-libraries/Servo)
 
 Para instalar librerias .zip de Arduino, instalar ```sudo apt install wget unzip```. Luego
 
@@ -45,6 +46,7 @@ Para buscar librerías que están en el library manager de Arduino se debe corre
 ```bash
 arduino-cli lib install "DHT sensor library"
 arduino-cli lib install "SerialCommands"
+arduino-cli lib install "Servo"
 ```
 
 ## Compilado
