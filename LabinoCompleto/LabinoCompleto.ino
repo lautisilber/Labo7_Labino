@@ -293,6 +293,13 @@ void cmdStepperRaw(SerialCommands* sender)
     sender->GetSerial()->println(pump.getStepperStep());
 }
 
+void cmdHello(SerialCommands* sender)
+{
+    // cmd: hello
+    // respuesta: OK
+    sender->GetSerial()->println(F("OK"));
+}
+
 #define SERIAL_COMMAND_BUFFER_SIZE 32
 char serialCommandBuffer[SERIAL_COMMAND_BUFFER_SIZE] = {0};
 SerialCommands serialCommands(&Serial, serialCommandBuffer, SERIAL_COMMAND_BUFFER_SIZE, "\n", " ");
@@ -303,6 +310,7 @@ SerialCommand cmdRegar_("water", cmdRegar);
 SerialCommand cmdStepper_("stepper", cmdStepper);
 SerialCommand cmdServo_("servo", cmdServo);
 SerialCommand cmdStepperRaw_("stepper_raw", cmdStepperRaw);
+SerialCommand cmdHello_("hello", cmdHello);
 
 void setup()
 {
@@ -317,6 +325,7 @@ void setup()
     serialCommands.AddCommand(&cmdStepper_);
     serialCommands.AddCommand(&cmdServo_);
     serialCommands.AddCommand(&cmdStepperRaw_);
+    serialCommands.AddCommand(&cmdHello_);
 }
 
 void loop() {
