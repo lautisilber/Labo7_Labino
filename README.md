@@ -39,6 +39,10 @@ fi
 wget "$LIBRARY_ZIP_URL" -O "LIBRARY_OUT_FILE"
 unzip "LIBRARY_OUT_FILE" -d "$HOME/Arduino/libraries/$LIBRARY_NAME"
 rm "LIBRARY_OUT_FILE"
+
+# esto hay que hacerlo por como esta armado el archivo zip
+mv "$HOME/Arduino/libraries/$LIBRARY_NAME/$LIBRARY_NAME-master/*" "$HOME/Arduino/libraries/$LIBRARY_NAME"
+rmdir "$HOME/Arduino/libraries/$LIBRARY_NAME/$LIBRARY_NAME-master"
 ```
 
 Para buscar librerías que están en el library manager de Arduino se debe correr el comando ```arduino-cli lib search <nombre de libraría>```. Luego estas se pueden instalar con el comando ```arduino-cli lib install <nombre de libraría>```. En particular, para este proyecto se debe correr el siguiente comando
