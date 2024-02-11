@@ -107,7 +107,7 @@ public:
         return s1 && s2;
     }
 
-    void pumpState(bool state) // AAAAAA
+    void pumpState(bool state)
     {
         const uint8_t dutyCycle = state ? _pumpSpeed : 0;
         PWMHelper::write(_pinPump, dutyCycle); // de la libreria PWM

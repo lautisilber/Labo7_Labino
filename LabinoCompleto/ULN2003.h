@@ -64,6 +64,7 @@ private:
             digitalWrite(_in2, stepHalf[i][1]);
             digitalWrite(_in3, stepHalf[i][2]);
             digitalWrite(_in4, stepHalf[i][3]);
+            delay(1);
         }
     }
 
@@ -75,6 +76,7 @@ private:
             digitalWrite(_in2, stepHalf[i][1]);
             digitalWrite(_in3, stepHalf[i][2]);
             digitalWrite(_in4, stepHalf[i][3]);
+            delay(1);
         }
     }
 
@@ -86,6 +88,7 @@ private:
             digitalWrite(_in2, stepNormal[i][1]);
             digitalWrite(_in3, stepNormal[i][2]);
             digitalWrite(_in4, stepNormal[i][3]);
+            delay(1);
         }
     }
 
@@ -97,6 +100,7 @@ private:
             digitalWrite(_in2, stepNormal[i][1]);
             digitalWrite(_in3, stepNormal[i][2]);
             digitalWrite(_in4, stepNormal[i][3]);
+            delay(1);
         }
     }
 
@@ -108,6 +112,7 @@ private:
             digitalWrite(_in2, stepWave[i][1]);
             digitalWrite(_in3, stepWave[i][2]);
             digitalWrite(_in4, stepWave[i][3]);
+            delay(1);
         }
     }
 
@@ -119,6 +124,7 @@ private:
             digitalWrite(_in2, stepWave[i][1]);
             digitalWrite(_in3, stepWave[i][2]);
             digitalWrite(_in4, stepWave[i][3]);
+            delay(1);
         }
     }
 

@@ -31,7 +31,7 @@ PumpManager<nPosiciones> pump(
     7, // pin servo
     3, // pump pin
     pumpPos, // posiciones
-    5000, 15, percent2dutyCycleI(75) // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
+    1000, 5, percent2dutyCycleI(75) // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
 );
 
 bool smartAtoi(long int *i, const char *charr)
@@ -240,7 +240,7 @@ void cmdServo(SerialCommands* sender)
             sender->GetSerial()->println(ang_str);
             return;
         }
-        else if (angle >= SERVO_MIN_ANGLE && angle <= SERVO_MAX_ANGLE)
+        else if (angle <= SERVO_MIN_ANGLE && angle >= SERVO_MAX_ANGLE)
         {
             sender->GetSerial()->print(F("ERROR: El argumento es un numero menor a "));
             sender->GetSerial()->print(SERVO_MIN_ANGLE);
@@ -265,7 +265,7 @@ void cmdStepperRaw(SerialCommands* sender)
     // Si se transmitio un argumento, este debe ser uint32_t y es el paso al que se debe llevar el stepper
 
     char* step_str = sender->Next();
-    if (step_str != NULL)
+    if (step_str == NULL)
     {
         sender->GetSerial()->println(F("ERROR: No se proporcino un argumento numerico."));
         return;
@@ -331,4 +331,9 @@ void setup()
 void loop() {
     serialCommands.ReadSerial();
     delay(50);
+    // bool res;
+    // res = pump.servoGoToAngle(10);
+    // Serial.println(res);
+    // res = pump.servoGoToAngle(170);
+    // Serial.println(res);
 }
