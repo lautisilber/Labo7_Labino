@@ -98,5 +98,3 @@ La API del programa consiste en comandos terminados por un caracter de nueva lí
 |```servo```|```<int:angulo>```(opcional)|-|-|Similar a ```stepper```. Si se proporciona un ángulo, lleva el servo a dicho ángulo. En cualquier caso devuelve el ángulo final en el que se encuentra el servo como un número entero|
 |```stepper_raw```|```<int:paso>```|-|-|Lleva el stepper al paso indicado en el argumento. Devuelve el paso en el que se encuentra el stepper al final (debería coincidir con el argumento)|
 |```hello```|-|-|-|Responde "OK". Para probar conexión|
-
-
