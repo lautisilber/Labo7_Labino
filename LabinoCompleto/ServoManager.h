@@ -29,9 +29,22 @@ public:
 
     void begin()
     {
-        _servo.attach(_pin, SERVO_MIN_ANGLE, SERVO_MAX_ANGLE);
+        attach(true);
         goToAngleRaw(SERVO_CENTER_ANGLE);
     }
+
+    void attach(bool state) const
+    {
+        if (state)
+        {
+            _servo.attach(_pin, SERVO_MIN_ANGLE, SERVO_MAX_ANGLE);
+        }
+        else
+        {
+            _servo.detach();
+        }
+    }
+    bool attached() const { return _servo.attached(); }
 
     bool angle(uint8_t angle)
     {

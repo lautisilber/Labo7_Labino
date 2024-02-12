@@ -51,6 +51,7 @@ private:
     MovementType _movementType;
     uint32_t _usPerStep = MIN_US_PER_STEP;
     byte _in1, _in2, _in3, _in4;
+    bool _attached = false;
 
     bool _errorFlag = false;
     char _errorStr[ULN_2003_ERROR_LOG_STR_MAX_SIZE] = {0};
@@ -140,6 +141,44 @@ public:
         setUsPerStep(usPerStep);
     }
 
+    void attach(bool state)
+    {
+        if (state)
+        {
+            switch(_movementType)
+            {
+            case HALF:
+                digitalWrite(_in1, stepHalf[0][0]);
+                digitalWrite(_in2, stepHalf[0][1]);
+                digitalWrite(_in3, stepHalf[0][2]);
+                digitalWrite(_in4, stepHalf[0][3]);
+                break;
+            case NORMAL:
+                digitalWrite(_in1, stepNormal[0][0]);
+                digitalWrite(_in2, stepNormal[0][1]);
+                digitalWrite(_in3, stepNormal[0][2]);
+                digitalWrite(_in4, stepNormal[0][3]);
+                break;
+            case WAVE:
+                digitalWrite(_in1, stepWave[0][0]);
+                digitalWrite(_in2, stepWave[0][1]);
+                digitalWrite(_in3, stepWave[0][2]);
+                digitalWrite(_in4, stepWave[0][3]);
+                break;
+            default:
+                break;
+            }
+        }
+        else
+        {
+            digitalWrite(_in1, LOW);
+            digitalWrite(_in2, LOW);
+            digitalWrite(_in3, LOW);
+            digitalWrite(_in4, LOW);
+        }
+        _attached = state;
+    }
+
     bool setUsPerStep(uint32_t usPerStep)
     {
         if (usPerStep < MIN_US_PER_STEP)
@@ -166,6 +205,7 @@ public:
         if (steps == 0) return;
         bool clockwise = steps > 0;
         long n = clockwise ? steps : -steps;
+        _attached = true;
         switch(_movementType)
         {
         case HALF:
@@ -217,6 +257,7 @@ public:
     }
 
     long getCurrentPosition() const { return _currPosition; }
+    bool attached() const { return _attached; }
 };
 
 #endif

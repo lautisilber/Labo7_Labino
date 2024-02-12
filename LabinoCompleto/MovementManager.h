@@ -1,5 +1,5 @@
-#ifndef PUMP_MANAGER_H
-#define PUMP_MANAGER_H
+#ifndef MOVEMENT_MANAGER_H
+#define MOVEMENT_MANAGER_H
 
 // TODO:
 /*
@@ -57,7 +57,7 @@ typedef struct Position
 } Position;
 
 template <size_t N>
-class PumpManager
+class MovementManager
 {
 private:
     byte _pinIN1, _pinIN2, _pinIN3, _pinIN4;
@@ -145,10 +145,17 @@ public:
 
         return stepperGoToStep(_positions[positionIndex].step);
     }
-    bool stepperGoHome() { return stepperGoToPosition(0); }
+    bool stepperGoHome() {
+        bool s = stepperGoToStep(0);
+        _stepper.attach(false); // detach when ended watering
+        return s;
+    }
+    void stepperAttach(bool attach) { _stepper.attach(attach); }
 
     bool servoGoToAngle(uint8_t angle)
     {
+        if (!_servo.attached())
+            _servo.attach(true);
         bool res = _servo.angle(angle);
         if (!res)
         {
@@ -168,27 +175,37 @@ public:
         uint8_t angle = _positions[positionIndex].angle ? SERVO_MAX_ANGLE : SERVO_MIN_ANGLE;
         return servoGoToAngle(angle);
     }
-    bool servoGoHome() { return servoGoToAngle(SERVO_CENTER_ANGLE); }
-
-    bool water(size_t positionIndex, unsigned long time_ms, bool returnHome=true)
+    bool servoGoHome()
     {
-        if(!stepperGoToPosition(positionIndex) || !servoGoToPosition(positionIndex));
-            return false;
+        bool s = servoGoToAngle(SERVO_CENTER_ANGLE);
+        servoAttach(false);
+        return s;
+    }
+    void servoAttach(bool attach)
+    {
+        _servo.attach(attach);
+    }
+
+    // bool water(size_t positionIndex, unsigned long time_ms, bool returnHome=true)
+    // {
+    //     if(!stepperGoToPosition(positionIndex) || !servoGoToPosition(positionIndex));
+    //         return false;
         
-        pumpForTime(time_ms);
+    //     pumpForTime(time_ms);
 
-        if (returnHome)
-            return stepperGoHome() && servoGoHome();
-        return true;
-    }
-    bool water(size_t positionIndex, unsigned long time_ms, uint8_t pumpSpeed, bool returnHome=true)
-    {
-        uint8_t oldPumpSpeed = _pumpSpeed;
-        setPumpSpeed(_pumpSpeed);
-        bool res = water(positionIndex, time_ms, returnHome);
-        _pumpSpeed = oldPumpSpeed;
-        return res;
-    }
+    //     if (returnHome)
+    //         return stepperGoHome() && servoGoHome();
+
+    //     return true;
+    // }
+    // bool water(size_t positionIndex, unsigned long time_ms, uint8_t pumpSpeed, bool returnHome=true)
+    // {
+    //     uint8_t oldPumpSpeed = _pumpSpeed;
+    //     setPumpSpeed(_pumpSpeed);
+    //     bool res = water(positionIndex, time_ms, returnHome);
+    //     _pumpSpeed = oldPumpSpeed;
+    //     return res;
+    // }
 
     inline void printError(Stream *stream)
     {
