@@ -5,6 +5,7 @@
 
 #include "Balanzas.h"
 #include "MovementManager.h"
+#include "PWMHelper.h"
 
 #define ARR_LEN(a) sizeof(a)/sizeof(a[0])
 
@@ -26,13 +27,16 @@ DHT dht(dhtPin, DHT_TYPE);
 
 MultipleHX711<nBalanzas, uint8_t> hx711(sckPin, dataPins);
 
-MovementManager<nPosiciones> pump(
-    8, 9, 10, 11, // stepper driver pins
-    7, // pin servo
-    3, // pump pin
+MovementManager<nPosiciones> movement(
+    driverPins[0], driverPins[1], driverPins[2], driverPins[3], // stepper driver pins
+    servoPin, // pin servo
     pumpPos, // posiciones
-    1000, 5, percent2dutyCycleI(75) // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
+    1000, 5  // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
 );
+
+PWMPin pump(pumpPin, percent2dutyCycleI(50));
+
+bool water(Stream *stream, size_t index, unsigned long tiempo, uint8_t intensidad, bool returnHome=true);
 
 bool smartAtoi(long int *i, const char *charr)
 {
@@ -147,37 +151,11 @@ void cmdRegar(SerialCommands* sender)
         return;
     }
 
-    if (index < 0 || index >= nBalanzas)
-    {
-        sender->GetSerial()->print(F("ERROR: El indice de maceta recibido es "));
-        sender->GetSerial()->print(index);
-        sender->GetSerial()->print(F(". Debe ser mayor o igual a 0 y menor que "));
-        sender->GetSerial()->print(nBalanzas);
-        return;
-    }
-    if (tiempo <= 0)
-    {
-        sender->GetSerial()->print(F("ERROR: El tiempo recibido es "));
-        sender->GetSerial()->print(tiempo);
-        sender->GetSerial()->println(F(". Debe ser mayor a 0"));
-        return;
-    }
-    if (intensidad <= 0 || intensidad > 100)
-    {
-        sender->GetSerial()->print(F("ERROR: La intensidad PWM recibida es "));
-        sender->GetSerial()->print(intensidad);
-        sender->GetSerial()->println(F(". Debe ser mayor a 0 y menor o igual a 100"));
-        return;
-    }
-
     // regar con esas especificaciones
-    uint8_t dutyCycleU8 = percent2dutyCycleI(intensidad);
-    bool res = pump.water(index, tiempo, dutyCycleU8);
+    bool res = water(sender->GetSerial(), index, tiempo, intensidad);
 
     if (res)
         sender->GetSerial()->println(F("OK"));
-    else
-        pump.printError(sender->GetSerial());
 }
 
 void cmdStepper(SerialCommands* sender)
@@ -209,16 +187,16 @@ void cmdStepper(SerialCommands* sender)
             return;
         }
 
-        bool success = pump.stepperGoToPosition(index);
+        bool success = movement.stepperGoToPosition(index);
 
         if (!success)
         {
-            pump.printError(sender->GetSerial());
+            movement.printError(sender->GetSerial());
             return;
         }
     }
 
-    sender->GetSerial()->println(pump.getStepperStep());
+    sender->GetSerial()->println(movement.getStepperStep());
 }
 
 void cmdServo(SerialCommands* sender)
@@ -251,10 +229,10 @@ void cmdServo(SerialCommands* sender)
             return;
         }
 
-        pump.servoGoToAngle(angle);
+        movement.servoGoToAngle(angle);
     }
 
-    sender->GetSerial()->println(pump.getServoAngle());
+    sender->GetSerial()->println(movement.getServoAngle());
 }
 
 void cmdPos(SerialCommands* sender)
@@ -273,8 +251,8 @@ void cmdPos(SerialCommands* sender)
     bool success;
     if (strcmp(index_str, "home") == 0)
     {
-        bool s1 = pump.servoGoHome();
-        bool s2 = pump.stepperGoHome();
+        bool s1 = movement.servoGoHome();
+        bool s2 = movement.stepperGoHome();
         success = s1 && s2;
     }
     else
@@ -299,13 +277,13 @@ void cmdPos(SerialCommands* sender)
             return;
         }
 
-        bool s1 = pump.stepperGoToPosition(index);
-        bool s2 = pump.servoGoToPosition(index);
+        bool s1 = movement.stepperGoToPosition(index);
+        bool s2 = movement.servoGoToPosition(index);
         success = s1 && s2;
     }
 
     if (!success)
-        pump.printError(sender->GetSerial());
+        movement.printError(sender->GetSerial());
     else
         sender->GetSerial()->println(F("OK"));
 }
@@ -335,15 +313,15 @@ void cmdStepperRaw(SerialCommands* sender)
         return;
     }
 
-    bool success = pump.stepperGoToStep(step);
+    bool success = movement.stepperGoToStep(step);
 
     if (!success)
     {
-        pump.printError(sender->GetSerial());
+        movement.printError(sender->GetSerial());
         return;
     }
 
-    sender->GetSerial()->println(pump.getStepperStep());
+    sender->GetSerial()->println(movement.getStepperStep());
 }
 
 void cmdStepperAttach(SerialCommands* sender)
@@ -378,7 +356,7 @@ void cmdStepperAttach(SerialCommands* sender)
 
     bool attach = (bool)attachInt;
 
-    pump.stepperAttach(attach);
+    movement.stepperAttach(attach);
 
     sender->GetSerial()->println(F("OK"));
 }
@@ -408,7 +386,7 @@ void setup()
 {
     Serial.begin(9600);
 
-    pump.begin();
+    movement.begin();
 
     // dht.begin();
 
@@ -427,4 +405,59 @@ void setup()
 void loop() {
     serialCommands.ReadSerial();
     delay(50);
+}
+
+
+bool water(Stream *stream, size_t index, unsigned long tiempo, uint8_t intensidad, bool returnHome=true)
+{
+    if (index >= nPosiciones)
+    {
+        stream->print(F("ERROR: El indice de maceta recibido es "));
+        stream->print(index);
+        stream->print(F(". Debe ser mayor o igual a 0 y menor que "));
+        stream->print(nBalanzas);
+        return false;
+    }
+    else if (tiempo <= 0)
+    {
+        stream->print(F("ERROR: El tiempo recibido es "));
+        stream->print(tiempo);
+        stream->println(F(". Debe ser mayor a 0"));
+        return false;
+    }
+    else if (intensidad <= 0 || intensidad > 100)
+    {
+        stream->print(F("ERROR: La intensidad PWM recibida es "));
+        stream->print(intensidad);
+        stream->println(F(". Debe ser mayor a 0 y menor o igual a 100"));
+        return false;
+    }
+
+    bool success = movement.goToPosition(index, true, false);
+
+    if (!success)
+    {
+        movement.printError(stream);
+        return false;
+    }
+
+    pump.setPercent(intensidad);
+    pump.state(true);
+
+    delay(tiempo);
+
+    pump.state(false);
+
+    if (returnHome)
+    {
+        success = movement.goHome(false, true);
+    }
+
+    if (!success)
+    {
+        movement.printError(stream);
+        return false;
+    }
+
+    return true;
 }

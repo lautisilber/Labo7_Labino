@@ -96,5 +96,7 @@ La API del programa consiste en comandos terminados por un caracter de nueva lí
 |```water```|```<int:indice>```|```<int:tiempo>```|```<int:intensidad>```|Riega en la posición correspondiente con el indice, durante el tiempo especificado en tiempo (en milisegundos), con la intensidad de la bomba especificada en intensidad (intensidad va de 1% a 100% de la potencia total). Devuelve el texto "OK"|
 |```stepper```|```<int:indice>``` (opcional)|-|-|Si se proporciona el argumento indice, lleva el stepper a la posición correspondiente a la posición del índice nidicado. Con o sin argumentos, devuelve la posición en pasos en que se encuentra el stepper como un número entero|
 |```servo```|```<int:angulo>```(opcional)|-|-|Similar a ```stepper```. Si se proporciona un ángulo, lleva el servo a dicho ángulo. En cualquier caso devuelve el ángulo final en el que se encuentra el servo como un número entero|
+|```pos```|```<int:index || std:home>```|-|-|Si el argumento es un int, lleva el stepper y servo a la posicion del indice indicado. Si el argumento es el texto "home", lleva el stepper y el servo a la posicion especificada como home|
 |```stepper_raw```|```<int:paso>```|-|-|Lleva el stepper al paso indicado en el argumento. Devuelve el paso en el que se encuentra el stepper al final (debería coincidir con el argumento)|
+|```stepper_attach```|```<0 o 1:attach>```|-|-|Attachea o desattachea el stepper dependiendo del argumento. Devuelve "OK"|
 |```ok```|-|-|-|Responde "OK". Para probar conexión|

@@ -4,6 +4,7 @@
 // https://programarfacil.com/blog/arduino-blog/motor-paso-a-paso-uln2003-l298n/
 
 #include <Arduino.h>
+#include "PROGMEMUtils.h"
 
 #define STEPS_PER_REVOLUTION 32 // 64 half steps
 #define STEPS_PER_REVOLUTION_WITH_GEARING 2048 // 4096 half steps
@@ -184,7 +185,7 @@ public:
         if (usPerStep < MIN_US_PER_STEP)
         {
             _usPerStep = MIN_US_PER_STEP;
-            snprintf(_errorStr, ULN_2003_ERROR_LOG_STR_MAX_SIZE, "WARNING: Intentaste poner los microsegundos por paso del stepper al valor de %u cuando el minimo permitido es %u. Se seteo el tiempo entre pasos al minimo posible", usPerStep, MIN_US_PER_STEP);
+            SNPRINTF_FLASH(_errorStr, ULN_2003_ERROR_LOG_STR_MAX_SIZE, F("WARNING: Intentaste poner los microsegundos por paso del stepper al valor de %u cuando el minimo permitido es %u. Se seteo el tiempo entre pasos al minimo posible"), usPerStep, MIN_US_PER_STEP);
             _errorFlag = true;
             return false;
         }

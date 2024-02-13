@@ -2,6 +2,7 @@
 #define BALANZAS_H
 
 #include <Arduino.h>
+#include "PROGMEMUtils.h"
 
 #define BALANZAS_ERROR_LOG_STR_MAX_SIZE 128
 
@@ -42,7 +43,7 @@ private:
             return true;
         if (showMsg)
         {
-            snprintf(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, "ERROR: El indice %i es mayor al maximo indice permitido: %i", index, N);
+            SNPRINTF_FLASH(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, F("ERROR: El indice %i es mayor al maximo indice permitido: %i"), index, N);
             _errorFlag = true;
         }
         return false;
@@ -96,7 +97,7 @@ public:
             }
             if (!ready)
             {
-                snprintf(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, "ERROR: La balanza de indice %i no esta lista y se termino el tiempo de espera", index);
+                SNPRINTF_FLASH(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, F("ERROR: La balanza de indice %i no esta lista y se termino el tiempo de espera"), index);
                 _errorFlag = true;
             }
             return ready;
@@ -122,7 +123,7 @@ public:
             }
             if (!ready)
             {
-                snprintf(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, "ERROR: No todas las balanzas estan listas y se termino el tiempo de espera");
+                SNPRINTF_FLASH_NO_ARGS(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, F("ERROR: No todas las balanzas estan listas y se termino el tiempo de espera"));
                 _errorFlag = true;
             }
             return ready;

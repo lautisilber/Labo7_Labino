@@ -123,4 +123,68 @@ namespace PWMHelper
 }
 
 
+// Good pins for PWM
+// For UNO, Nano (3, 5, 6, 9, 10, 11)
+//   Pin  3 => TIMER2B    TESTED
+//   Pin  5 => TIMER0B    TESTED
+//   Pin  6 => TIMER0A
+//   Pin  9 => TIMER1A    TESTED
+//   Pin 10 => TIMER1B    TESTED
+//   Pin 11 => TIMER2(A)
+#define DEFAULT_PWM_FREQUENCY 20000
+
+constexpr uint8_t percent2dutyCycleF(float percent)
+{
+    return roundf( (percent / 100) * 255 );
+}
+
+constexpr uint8_t percent2dutyCycleI(int percent)
+{
+    return percent2dutyCycleF((float)percent);
+}
+
+class PWMPin
+{
+private:
+    byte _pin;
+    uint32_t _frequency;
+    uint8_t _dutyCycle;
+
+public:
+    PWMPin(byte pin, uint8_t dutyCycle, uint32_t frequency=DEFAULT_PWM_FREQUENCY)
+        : _pin(pin), _dutyCycle(dutyCycle), _frequency(frequency)
+    {
+        bool s1 = PWMHelper::begin(pin);
+        bool s2 = setFrequency(pin, frequency);
+        if (!(s1 && s2))
+        {
+            Serial.print(F("ERROR: No se pudo inicializar PWM en el pin "));
+            Serial.println(pin);
+        }
+    }
+
+    bool setFrequency(byte pin, uint32_t frequency)
+    {
+        return PWMHelper::setFrequency(pin, frequency);
+    }
+
+    void setDutyCycle(uint8_t dutyCycle)
+    {
+        // 0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump
+        _dutyCycle = dutyCycle;
+    }
+
+    void setPercent(uint8_t percent)
+    {
+        setDutyCycle(percent2dutyCycleI(percent));
+    }
+
+    void state(bool s)
+    {
+        uint8_t dc = _dutyCycle * (uint8_t)s;
+        PWMHelper::write(_pin, dc);
+    }
+};
+
+
 #endif

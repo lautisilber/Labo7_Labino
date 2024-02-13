@@ -23,37 +23,25 @@
 // #include <Stepper.h>
 #include "ULN2003.h"
 #include "ServoManager.h"
-
-// https://github.com/terryjmyers/PWM
-// Con esta libreria podemos controlar exactamente la frecuencia del PWM sin tener que setear a mano los registros correspondientes
-// #include <PWM.h>
-#include "PWMHelper.h"
+#include "PROGMEMUtils.h"
 
 
 // https://lastminuteengineers.com/28byj48-stepper-motor-arduino-tutorial/#
 #define STEPS_PER_REVOLUTION_28BYJ_48_5V 2048
 #define MAX_MACETAS 32
-#define PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE 128
-
-// Good pins for PWM
-// For UNO, Nano (3, 5, 6, 9, 10, 11)
-//   Pin  3 => TIMER2B    TESTED
-//   Pin  5 => TIMER0B    TESTED
-//   Pin  6 => TIMER0A
-//   Pin  9 => TIMER1A    TESTED
-//   Pin 10 => TIMER1B    TESTED
-//   Pin 11 => TIMER2(A)
-#define DEFAULT_PWM_FREQUENCY 20000
+#define MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE 128
 
 // constexpr inline uint16_t map8to16(const uint8_t u8)
 // {
 //     return u8 << 8; // this is effectively mapping from (0, 255) -> (0, 65280)
 // }
 
+static const char error_n_posiciones[] PROGMEM = "ERROR: No se puede ir a la posicion %i ya que hay unicamente %i posiciones";
+
 typedef struct Position
 {
     long step;
-    bool angle; // true is one side of the system, false is the other
+    uint8_t angle;
 } Position;
 
 template <size_t N>
@@ -62,169 +50,153 @@ class MovementManager
 private:
     byte _pinIN1, _pinIN2, _pinIN3, _pinIN4;
     byte _pinServo;
-    byte _pinPump;
 
     ULN2003 _stepper;
     ServoManager _servo;
 
     Position *_positions;
+    Position *_homePosition;
     long _stepperSpeed; // ms per revolution (fastest is approx 5 s = 5000 ms)
     uint16_t _servoSpeed; // delay in ms between each angle
-    uint8_t _pumpSpeed; // 0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump
 
-    char _errorStr[PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE] = {0};
-
-    inline void _setStepperSpeedOnly(long stepperSpeed) { _stepper.setMsPerRevolution(stepperSpeed); }
-    bool _setPWMFrequency(uint32_t frequency)
-    {
-        //sets the frequency for the specified pin
-	    bool success = PWMHelper::setFrequency(_pinPump, frequency); // de la libreria PWM
-
-        if (!success) {
-            snprintf(_errorStr, PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, "ERROR: No se pudo setear la frecuencia PWM del pin %i a la frecuencia %i", _pinPump, frequency);
-        }
-
-        return success;
-    }
+    char _errorStr[MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE] = {0};
 
 public:
-    PumpManager(byte in1, byte in2, byte in3, byte in4, byte servo, byte pump, const Position positions[N], long stepperSpeed=5000, uint16_t servoSpeed=15, uint8_t pumpSpeed=percent2dutyCycleI(50))
+    MovementManager(byte in1, byte in2, byte in3, byte in4, byte servo, const Position positions[N], const Position *homePosition, long stepperSpeed=5000, uint16_t servoSpeed=15)
         : _stepper(ULN2003(in1, in2, in3, in4, 2000)), _servo(servo, servoSpeed),
-          _pinIN1(in1), _pinIN2(in2), _pinIN3(in3), _pinIN4(in4), _pinServo(servo), _pinPump(pump), _stepperSpeed(stepperSpeed), _servoSpeed(servoSpeed), _pumpSpeed(pumpSpeed)
+          _pinIN1(in1), _pinIN2(in2), _pinIN3(in3), _pinIN4(in4), _pinServo(servo), _stepperSpeed(stepperSpeed), _servoSpeed(servoSpeed)
     {
         // set positions
         _positions = positions;
+        _homePosition = homePosition;
         
         // set stepper speed
-        _setStepperSpeedOnly(stepperSpeed);
+        setStepperSpeed(stepperSpeed);
     }
 
     bool begin()
     {
-        const bool s1 = PWMHelper::begin(_pinPump);
-        const bool s2 = _setPWMFrequency(_pumpSpeed); // de la libreria PWM
         _servo.begin();
-        return s1 && s2;
     }
 
-    void pumpState(bool state)
-    {
-        const uint8_t dutyCycle = state ? _pumpSpeed : 0;
-        PWMHelper::write(_pinPump, dutyCycle); // de la libreria PWM
-    }
-    inline void pumpOn() { pumpState(true); }
-    inline void pumpOff() { pumpState(false); }
-    void pumpForTime(unsigned long time_ms)
-    {
-        pumpOn();
-        delay(time_ms);
-        pumpOff();
-    }
-
-
-    inline bool setPumpSpeed(uint8_t pumpSpeed, bool force=false) { _pumpSpeed = pumpSpeed; }
-    inline void setStepperSpeed(long stepperSpeed) { _stepperSpeed = stepperSpeed; _setStepperSpeedOnly(stepperSpeed); }
-
-    bool stepperGoToStep(long step)
+    /// stepper ///
+    inline void setStepperSpeed(long stepperSpeed) { _stepperSpeed = stepperSpeed; _stepper.setMsPerRevolution(stepperSpeed); }
+    bool stepperGoToStep(long step, bool detach=false)
     {
         if (step < 0)
         {
-            snprintf(_errorStr, PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, "ERROR: No se puede ir a una posicion negativa. La posicion provista fue %i", step);
+            SNPRINTF_FLASH(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, F("ERROR: No se puede ir a una posicion negativa. La posicion provista fue %i"), step);
             return false;
         }
         _stepper.goToPosition(step);
+        if (detach)
+            stepperAttach(false);
         return true;
     }
-    bool stepperGoToPosition(size_t positionIndex)
+    bool stepperGoToPosition(Position *position, bool detach=false)
+    {
+        return stepperGoToStep(position->step, detach);
+    }
+    bool stepperGoToPosition(size_t positionIndex, bool detach=false)
     {
         if (positionIndex >= N)
         {
-            snprintf(_errorStr, PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, "ERROR: El stepper no puede ir a la posicion %i ya que hay unicamente %i posiciones", positionIndex, N);
+            SNPRINTF_PROGMEM(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, error_n_posiciones, positionIndex, N);
             return false;
         }
 
-        return stepperGoToStep(_positions[positionIndex].step);
+        return stepperGoToPosition(&_positions[positionIndex], detach);
     }
-    bool stepperGoHome() {
-        bool s = stepperGoToStep(0);
-        _stepper.attach(false); // detach when ended watering
-        return s;
+    bool stepperGoHome(bool detach=true) {
+        return stepperGoToPosition(_homePosition, detach);
     }
     void stepperAttach(bool attach) { _stepper.attach(attach); }
+    inline long getStepperStep() const { return _stepper.getCurrentPosition(); }
+    //////////////
 
-    bool servoGoToAngle(uint8_t angle)
+    /// servo ///
+    bool servoGoToAngle(uint8_t angle, bool detach=false)
     {
         if (!_servo.attached())
             _servo.attach(true);
         bool res = _servo.angle(angle);
+        if (detach)
+            servoAttach(false);
         if (!res)
         {
-            snprintf(_errorStr, PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, "ERROR: El servo no puede ir al angulo %u", angle);
+            SNPRINTF_FLASH(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, F("ERROR: El servo no puede ir angulo %u, ya que se puede mover entre %u y %u"), angle, SERVO_MIN_ANGLE, SERVO_MAX_ANGLE);
             return false;
         }
         return true;
     }
-    bool servoGoToPosition(size_t positionIndex)
+    bool servoGoToPosition(Position *position, bool detach=false)
+    {
+        const uint8_t angle = position->angle;
+        return servoGoToAngle(angle, detach);
+    }
+    bool servoGoToPosition(size_t positionIndex, bool detach=false)
     {
         if (positionIndex >= N)
         {
-            snprintf(_errorStr, PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, "ERROR: El servo no puede ir a la posicion %i  ya que hay unicamente %i posiciones", positionIndex, N);
+            SNPRINTF_PROGMEM(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, error_n_posiciones, positionIndex, N);
+            return false;
+        }
+        return servoGoToAngle(&_positions[positionIndex], detach);
+    }
+    bool servoGoHome(bool detach=true)
+    {
+        return servoGoToPosition(_homePosition, detach);
+    }
+    void servoAttach(bool attach) { _servo.attach(attach); }
+    inline uint8_t getServoAngle() const { return _servo.getAngle(); }
+    /////////
+
+    /// position ///
+    bool goToPosition(size_t positionIndex, bool stepperFirst=true, bool detach=false)
+    {
+        if (positionIndex >= N)
+        {
+            SNPRINTF_PROGMEM(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, error_n_posiciones, positionIndex, N);
             return false;
         }
 
-        uint8_t angle = _positions[positionIndex].angle ? SERVO_MAX_ANGLE : SERVO_MIN_ANGLE;
-        return servoGoToAngle(angle);
+        bool s1, s2;
+        if (stepperFirst)
+        {
+            s1 = stepperGoToPosition(positionIndex, detach);
+            s2 = servoGoToPosition(positionIndex, detach);
+        }
+        else
+        {
+            s2 = servoGoToPosition(positionIndex, detach);
+            s1 = stepperGoToPosition(positionIndex, detach);
+        }
+
+        return s1 && s2;
     }
-    bool servoGoHome()
+    bool goHome(bool stepperFirst=false, bool detach=false)
     {
-        bool s = servoGoToAngle(SERVO_CENTER_ANGLE);
-        servoAttach(false);
-        return s;
+        bool s1, s2;
+        if (stepperFirst)
+        {
+            s1 = stepperGoToPosition(_homePosition, detach);
+            s2 = servoGoToPosition(_homePosition, detach);
+        }
+        else
+        {
+            s2 = servoGoToPosition(_homePosition, detach);
+            s1 = stepperGoToPosition(_homePosition, detach);
+        }
+        return s1 && s2;
     }
-    void servoAttach(bool attach)
-    {
-        _servo.attach(attach);
-    }
-
-    // bool water(size_t positionIndex, unsigned long time_ms, bool returnHome=true)
-    // {
-    //     if(!stepperGoToPosition(positionIndex) || !servoGoToPosition(positionIndex));
-    //         return false;
-        
-    //     pumpForTime(time_ms);
-
-    //     if (returnHome)
-    //         return stepperGoHome() && servoGoHome();
-
-    //     return true;
-    // }
-    // bool water(size_t positionIndex, unsigned long time_ms, uint8_t pumpSpeed, bool returnHome=true)
-    // {
-    //     uint8_t oldPumpSpeed = _pumpSpeed;
-    //     setPumpSpeed(_pumpSpeed);
-    //     bool res = water(positionIndex, time_ms, returnHome);
-    //     _pumpSpeed = oldPumpSpeed;
-    //     return res;
-    // }
+    ///////////////
 
     inline void printError(Stream *stream)
     {
         stream->println(_errorStr);
-        memset(_errorStr, '\0', PUMP_MANAGER_ERROR_LOG_STR_MAX_SIZE);
+        memset(_errorStr, '\0', MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE);
     }
-    inline long getStepperStep() const { return _stepper.getCurrentPosition(); }
-    inline uint8_t getServoAngle() const { return _servo.getAngle(); }
 };
-
-constexpr uint8_t percent2dutyCycleF(float percent)
-{
-    return roundf( (percent / 100) * 255 );
-}
-
-constexpr uint8_t percent2dutyCycleI(int percent)
-{
-    return percent2dutyCycleF((float)percent);
-}
 
 
 #endif
