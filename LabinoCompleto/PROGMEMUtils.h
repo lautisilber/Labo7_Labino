@@ -32,14 +32,14 @@ void progmemToStack(const __FlashStringHelper *fsh_charr, char *charr, size_t ch
 #define SNPRINTF_PROGMEM_NO_ARGS(dest, destLen, src_p)                 \
 {                                                                      \
     const size_t __bufferLen = strlen_P(src_p);                        \
-    char __buffer[__bufferLen] = {0};                                  \
+    char __buffer[__bufferLen+1] = {0};                                \
     progmemToStack(src_p, __buffer, __bufferLen);                      \
     snprintf(dest, destLen, __buffer);                                 \
 }
 #define SNPRINTF_PROGMEM(dest, destLen, src_p, ...)                    \
 {                                                                      \
     const size_t __bufferLen = strlen_P(src_p);                        \
-    char __buffer[__bufferLen] = {0};                                  \
+    char __buffer[__bufferLen+1] = {0};                                \
     progmemToStack(src_p, __buffer, __bufferLen);                      \
     snprintf(dest, destLen, __buffer, __VA_ARGS__);                    \
 }
@@ -48,7 +48,7 @@ void progmemToStack(const __FlashStringHelper *fsh_charr, char *charr, size_t ch
 {                                                                      \
     PGM_P __src_p = reinterpret_cast<PGM_P>(src_fsh);                  \
     const size_t __bufferLen = strlen_P(__src_p);                      \
-    char __buffer[__bufferLen] = {0};                                  \
+    char __buffer[__bufferLen+1] = {0};                                \
     progmemToStack(__src_p, __buffer, __bufferLen);                    \
     snprintf(dest, destLen, __buffer);                                 \
 }
@@ -56,7 +56,7 @@ void progmemToStack(const __FlashStringHelper *fsh_charr, char *charr, size_t ch
 {                                                                      \
     PGM_P __src_p = reinterpret_cast<PGM_P>(src_fsh);                  \
     const size_t __bufferLen = strlen_P(__src_p);                      \
-    char __buffer[__bufferLen] = {0};                                  \
+    char __buffer[__bufferLen+1] = {0};                                \
     progmemToStack(__src_p, __buffer, __bufferLen);                    \
     snprintf(dest, destLen, __buffer);                                 \
 }
