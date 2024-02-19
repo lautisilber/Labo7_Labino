@@ -1,8 +1,7 @@
 // https://github.com/adafruit/DHT-sensor-library
 #include <DHT.h>
-// https://github.com/ppedro74/Arduino-SerialCommands/blob/master/examples/SerialCommandsArguments/SerialCommandsArguments.ino
-#include <SerialCommands.h>
 
+#include "SmartSerial.h"
 #include "Balanzas.h"
 #include "MovementManager.h"
 #include "PWMHelper.h"
@@ -11,7 +10,7 @@
 
 // pins
 const byte sckPin = 2;
-const byte dataPins[] = {2, 5, 6, 12, 13};
+const byte dataPins[] = {5, A4};
 const byte dhtPin = 4;
 const byte driverPins[4] = {8, 9, 10, 11}; // in1, in2, in3, in4
 const byte servoPin = 7;
@@ -21,11 +20,10 @@ const Position pumpPos[] = {{1100, true}, {1100, false}, {2200, true}, {2200, fa
 const size_t nBalanzas = ARR_LEN(dataPins);
 const size_t nPosiciones = ARR_LEN(pumpPos);
 
-
 #define DHT_TYPE DHT22
 DHT dht(dhtPin, DHT_TYPE);
 
-MultipleHX711<nBalanzas, uint8_t> hx711(sckPin, dataPins);
+MultipleHX711<nBalanzas> hx711(dataPins, sckPin);
 
 MovementManager<nPosiciones> movement(
     driverPins[0], driverPins[1], driverPins[2], driverPins[3], // stepper driver pins
@@ -38,152 +36,132 @@ PWMPin pump(pumpPin, percent2dutyCycleI(50));
 
 bool water(Stream *stream, size_t index, unsigned long tiempo, uint8_t intensidad, bool returnHome=true);
 
-bool smartAtoi(long int *i, const char *charr)
+#define LED_ON() digitalWrite(LED_BUILTIN, HIGH)
+#define LED_OFF() digitalWrite(LED_BUILTIN, LOW)
+
+void cmdUnrecognized(Stream *stream, const char* cmd)
 {
-    char *endptr;
-    *i = strtol(charr, &endptr, 10);
-    return charr[0] != '\0' && *endptr == '\0';
+    LED_ON();
+    stream->print(F("ERROR: No se reconoce el comando \""));
+    stream->print(cmd);
+    stream->println(F("\""));
+    LED_OFF();
 }
 
-void cmdUnrecognized(SerialCommands* sender, const char* cmd)
+void cmdBalanza(Stream *stream, CommandArguments *comArgs)
 {
-    sender->GetSerial()->print(F("ERROR: No se reconoce el comando \""));
-    sender->GetSerial()->print(cmd);
-    sender->GetSerial()->println(F("\""));
-}
-
-void cmdBalanza(SerialCommands* sender)
-{
-    // cmd: hx ?<int:index>
-    // respuesta: 12 (si hay index); [12,34,56,78,...] (si no hay index)
+    // cmd: hx
+    // respuesta: [12,34,56,78,...]
     // devuelve los datos de la balanza
 
-    char* index_str = sender->Next();
-    if (index_str == NULL)
-    {
-        // devuelve todas las balanzas
-        long values[nBalanzas];
-        hx711.readAll(values);
-        if (hx711.error())
-        {
-            hx711.printError(sender->GetSerial());
-            return;
-        }
-        for (size_t i = 0; i < nBalanzas; i++)
-        {
-            sender->GetSerial()->print('[');
-            sender->GetSerial()->print(values[i]);
-            if (i < nBalanzas-1)
-                sender->GetSerial()->print(',');
-            else
-                sender->GetSerial()->println(']');
-        }
-        return;
-    }
+    // devuelve todas las balanzas
 
-    long int index;
-    bool isInt = smartAtoi(&index, index_str);
-    if (!isInt)
+    LED_ON();
+    long values[nBalanzas];
+    bool s = hx711.read(values);
+    if (!s)
     {
-        sender->GetSerial()->print(F("ERROR: El argumento no es un entero. El argumento provisto es "));
-        sender->GetSerial()->println(index_str);
+        stream->println(F("ERROR: No se pudo leer las balanzas"));
+        LED_OFF();
         return;
     }
-    else if (index < 0 || index >= nBalanzas)
+    for (size_t i = 0; i < nBalanzas; i++)
     {
-        sender->GetSerial()->print(F("ERROR: Balanza con indice "));
-        sender->GetSerial()->print(index);
-        sender->GetSerial()->print(F(" no existe. El indice debe estar entre 0 y "));
-        sender->GetSerial()->println(nBalanzas);
-        return;
+        stream->print('[');
+        stream->print(values[i]);
+        if (i < nBalanzas-1)
+            stream->print(',');
+        else
+            stream->println(']');
     }
-
-    long value = hx711.read(index);
-    if (hx711.error())
-        hx711.printError(sender->GetSerial());
-    else
-        sender->GetSerial()->println(value);
+    LED_OFF();
 }
 
-void cmdDHT(SerialCommands* sender)
+void cmdDHT(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: dht
     // respuesta: {"hum":12.34,"temp":56.78}
     // devuelve datos del DHT
 
+    LED_ON();
     float hum = dht.readHumidity();
     float temp = dht.readTemperature();
 
-    sender->GetSerial()->print(F("{\"hum\":"));
-    sender->GetSerial()->print(hum);
-    sender->GetSerial()->print(F(",\"temp\":"));
-    sender->GetSerial()->print(temp);
-    sender->GetSerial()->println(F("}"));
+    stream->print(F("{\"hum\":"));
+    stream->print(hum);
+    stream->print(F(",\"temp\":"));
+    stream->print(temp);
+    stream->println(F("}"));
+    LED_OFF();
 }
 
-void cmdRegar(SerialCommands* sender)
+void cmdRegar(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: water <int:index> <int:tiempo> <int:intensidad>
     // respuesta: ok
     // riega en la posicion <index>, la cantidad de milisegundos <tiempo>, con una intensidad de pwm <intensidad>
 
-    char* index_str = sender->Next();
-    char* tiempo_str = sender->Next();
-    char* intensidad_str = sender->Next();
-    if (index_str == NULL || tiempo_str == NULL || intensidad_str == NULL)
+    LED_ON();
+    if (comArgs->N != 3)
     {
-        sender->GetSerial()->println(F("ERROR: Los argumentos no se especificaron bien"));
+        stream->println(F("ERROR: Los argumentos no se especificaron bien"));
+        LED_OFF();
         return;
     }
 
     long int index, tiempo, intensidad;
-    bool isIntIndex = smartAtoi(&index, index_str);
-    bool isIntTiempo = smartAtoi(&index, tiempo_str); // en ms
-    bool isIntIntensidad = smartAtoi(&index, intensidad_str); // 0-100
+    bool isIntIndex = comArgs->toInt(0, &index);
+    bool isIntTiempo = comArgs->toInt(1, &tiempo); // en ms
+    bool isIntIntensidad = comArgs->toInt(2, &intensidad); // 0-100
     if (!(isIntIndex && isIntTiempo && isIntIntensidad))
     {
-        sender->GetSerial()->print(F("ERROR: Alguno de los argumentos no es un numero entero. Los argumentos recibidos son, en orden, "));
-        sender->GetSerial()->print(index);
-        sender->GetSerial()->print(F(", "));
-        sender->GetSerial()->print(tiempo);
-        sender->GetSerial()->print(F(", "));
-        sender->GetSerial()->println(intensidad);
+        stream->print(F("ERROR: Alguno de los argumentos no es un numero entero. Los argumentos recibidos son, en orden, "));
+        stream->print(index);
+        stream->print(F(", "));
+        stream->print(tiempo);
+        stream->print(F(", "));
+        stream->println(intensidad);
+        LED_OFF();
         return;
     }
 
     // regar con esas especificaciones
-    bool res = water(sender->GetSerial(), index, tiempo, intensidad);
+    bool res = water(stream, index, tiempo, intensidad);
 
     if (res)
-        sender->GetSerial()->println(F("OK"));
+        stream->println(F("OK"));
+
+    LED_OFF();
 }
 
-void cmdStepper(SerialCommands* sender)
+void cmdStepper(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: stepper ?<int:index>
     // respuesta: <int:posicion>
     // Devuelve la posicion actual del stepper del sistema de riego
     // Si se transmitio un argumento, este debe ser el indice de la posicion a la que se quiere llevar el stepper
 
-    char* index_str = sender->Next();
-    if (index_str != NULL)
+    LED_ON();
+    if (comArgs->N == 1)
     {
         // check if it is a number
         long int index;
-        bool isInt = smartAtoi(&index, index_str);
+        bool isInt = comArgs->toInt(0, &index);
 
         if (!isInt)
         {
-            sender->GetSerial()->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
-            sender->GetSerial()->println(index_str);
+            stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+            stream->println(comArgs->arg(0));
+            LED_OFF();
             return;
         }
         else if (index < 0 || index > nPosiciones)
         {
-            sender->GetSerial()->print(F("ERROR: El argumento es un numero menor a 0 o mayor a "));
-            sender->GetSerial()->print(nPosiciones);
-            sender->GetSerial()->print(F(". El numero del argumento es "));
-            sender->GetSerial()->println(index);
+            stream->print(F("ERROR: El argumento es un numero menor a 0 o mayor a "));
+            stream->print(nPosiciones-1);
+            stream->print(F(". El numero del argumento es "));
+            stream->println(index);
+            LED_OFF();
             return;
         }
 
@@ -191,65 +169,71 @@ void cmdStepper(SerialCommands* sender)
 
         if (!success)
         {
-            movement.printError(sender->GetSerial());
+            movement.printError(stream);
+            LED_OFF();
             return;
         }
     }
 
-    sender->GetSerial()->println(movement.getStepperStep());
+    stream->println(movement.getStepperStep());
+    LED_OFF();
 }
 
-void cmdServo(SerialCommands* sender)
+void cmdServo(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: servo ?<int:angulo>
     // respuesta: <int:angulo>
     // si se especifica un angulo, se movera el servo hasta ese angulo. en cualquier
     // caso, devuelve el angulo final del servo
 
-    char* ang_str = sender->Next();
-    if (ang_str != NULL)
+    LED_ON();
+    if (comArgs->N == 1)
     {
         // check if is all numbers
         long int angle;
-        bool isInt = smartAtoi(&angle, ang_str);
+        bool isInt = comArgs->toInt(0, &angle);
         if (!isInt)
         {
-            sender->GetSerial()->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
-            sender->GetSerial()->println(ang_str);
+            stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+            stream->println(comArgs->arg(0));
+            LED_OFF();
             return;
         }
         else if (angle <= SERVO_MIN_ANGLE && angle >= SERVO_MAX_ANGLE)
         {
-            sender->GetSerial()->print(F("ERROR: El argumento es un numero menor a "));
-            sender->GetSerial()->print(SERVO_MIN_ANGLE);
-            sender->GetSerial()->print(F(" o mayor a "));
-            sender->GetSerial()->print(SERVO_MAX_ANGLE);
-            sender->GetSerial()->print(F(". El numero del argumento es "));
-            sender->GetSerial()->println(angle);
+            stream->print(F("ERROR: El argumento es un numero menor a "));
+            stream->print(SERVO_MIN_ANGLE);
+            stream->print(F(" o mayor a "));
+            stream->print(SERVO_MAX_ANGLE);
+            stream->print(F(". El numero del argumento es "));
+            stream->println(angle);
+            LED_OFF();
             return;
         }
 
         movement.servoGoToAngle(angle);
     }
 
-    sender->GetSerial()->println(movement.getServoAngle());
+    stream->println(movement.getServoAngle());
+    LED_OFF();
 }
 
-void cmdPos(SerialCommands* sender)
+void cmdPos(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: pos <int:index || std:home>
     // respuesta: OK
     // posiciona el sistema en la posicion del indice indicado
 
-    char* index_str = sender->Next();
-    if (index_str == NULL)
+    LED_ON();
+    if (comArgs->N == 0)
     {
-        sender->GetSerial()->println(F("ERROR: No se proporcino un argumento numerico."));
+        stream->println(F("ERROR: No se proporcino un argumento numerico."));
+        LED_OFF();
         return;
     }
 
     bool success;
-    if (strcmp(index_str, "home") == 0)
+    if (strcmp(comArgs->arg(0), "home") == 0)
     {
         bool s1 = movement.servoGoHome();
         bool s2 = movement.stepperGoHome();
@@ -259,21 +243,23 @@ void cmdPos(SerialCommands* sender)
     {
         // check if is a number
         long int index;
-        bool isInt = smartAtoi(&index, index_str);
+        bool isInt = comArgs->toInt(0, &index);
 
         if (!isInt)
         {
-            sender->GetSerial()->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
-            sender->GetSerial()->println(index_str);
+            stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+            stream->println(comArgs->arg(0));
+            LED_OFF();
             return;
         }
 
         if (index < -1 || index >= nPosiciones)
         {
-            sender->GetSerial()->print(F("ERROR: El argumento deberia ser un indice entre 0 y "));
-            sender->GetSerial()->print(nPosiciones);
-            sender->GetSerial()->print(F(" o -1 (posicion home) pero es el numero "));
-            sender->GetSerial()->println(index);
+            stream->print(F("ERROR: El argumento deberia ser un indice entre 0 y "));
+            stream->print(nPosiciones-1);
+            stream->print(F(" o -1 (posicion home) pero es el numero "));
+            stream->println(index);
+            LED_OFF();
             return;
         }
 
@@ -283,33 +269,36 @@ void cmdPos(SerialCommands* sender)
     }
 
     if (!success)
-        movement.printError(sender->GetSerial());
+        movement.printError(stream);
     else
-        sender->GetSerial()->println(F("OK"));
+        stream->println(F("OK"));
+    LED_OFF();
 }
 
-void cmdStepperRaw(SerialCommands* sender)
+void cmdStepperRaw(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: stepper_raw <int:index>
     // respuesta: <int:posicion>
     // Devuelve la posicion actual del stepper del sistema de riego
     // Si se transmitio un argumento, este debe ser uint32_t y es el paso al que se debe llevar el stepper
 
-    char* step_str = sender->Next();
-    if (step_str == NULL)
+    LED_ON();
+    if (comArgs->N == 0)
     {
-        sender->GetSerial()->println(F("ERROR: No se proporcino un argumento numerico."));
+        stream->println(F("ERROR: No se proporcino un argumento numerico."));
+        LED_OFF();
         return;
     }
 
     // check if is a number
     long int step;
-    bool isInt = smartAtoi(&step, step_str);
+    bool isInt = comArgs->toInt(0, &step);
 
     if (!isInt)
     {
-        sender->GetSerial()->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
-        sender->GetSerial()->println(step_str);
+        stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+        stream->println(comArgs->arg(0));
+        LED_OFF();
         return;
     }
 
@@ -317,93 +306,94 @@ void cmdStepperRaw(SerialCommands* sender)
 
     if (!success)
     {
-        movement.printError(sender->GetSerial());
+        movement.printError(stream);
+        LED_OFF();
         return;
     }
 
-    sender->GetSerial()->println(movement.getStepperStep());
+    stream->println(movement.getStepperStep());
+    LED_OFF();
 }
 
-void cmdStepperAttach(SerialCommands* sender)
+void cmdStepperAttach(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: stepper_attach <bool:attach>
     // respuesta: OK
     // Si attach es 1, fija el stepper a la posicion actual. Si attach es 0, suelta el stepper
 
-    char* attach_str = sender->Next();
-    if (attach_str == NULL)
+    LED_ON();
+    if (comArgs->N == 0)
     {
-        sender->GetSerial()->println(F("ERROR: No se proporcino un argumento booleano."));
+        stream->println(F("ERROR: No se proporcino un argumento booleano."));
+        LED_OFF();
         return;
     }
 
     // check if is a number
-    long int attachInt;
-    bool isInt = smartAtoi(&attachInt, attach_str);
+    bool attach;
+    bool isBool = comArgs->toBool(0, &attach);
 
-    if (!isInt)
+    if (!isBool)
     {
-        sender->GetSerial()->print(F("ERROR: El argumento no es un 1 o un 0. El argumento es "));
-        sender->GetSerial()->println(attach_str);
+        stream->print(F("ERROR: El argumento no es un valor booleano. El argumento es "));
+        stream->println(comArgs->arg(0));
+        LED_OFF();
         return;
     }
-    if (!(attachInt == 0 || attachInt == 1))
-    {
-        sender->GetSerial()->print(F("ERROR: El argumento no es un 1 o un 0. El argumento es "));
-        sender->GetSerial()->println(attach_str);
-        return;
-    }
-
-    bool attach = (bool)attachInt;
 
     movement.stepperAttach(attach);
 
-    sender->GetSerial()->println(F("OK"));
+    stream->println(attach ? F("1") : F("0"));
+    LED_OFF();
 }
 
-void cmdHello(SerialCommands* sender)
+void cmdHello(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: ok
     // respuesta: OK
-    sender->GetSerial()->println(F("OK"));
+
+    LED_ON();
+    stream->println(F("OK"));
+    delay(500);
+    LED_OFF();
 }
 
-#define SERIAL_COMMAND_BUFFER_SIZE 32
-char serialCommandBuffer[SERIAL_COMMAND_BUFFER_SIZE] = {0};
-SerialCommands serialCommands(&Serial, serialCommandBuffer, SERIAL_COMMAND_BUFFER_SIZE, "\n", " ");
+SmartSerial ss(&Serial);
 
-SerialCommand cmdBalanza_("hx", cmdBalanza);
-SerialCommand cmdDHT_("dht", cmdDHT);
-SerialCommand cmdRegar_("water", cmdRegar);
-SerialCommand cmdStepper_("stepper", cmdStepper);
-SerialCommand cmdServo_("servo", cmdServo);
-SerialCommand cmdPos_("pos", cmdPos);
-SerialCommand cmdStepperRaw_("stepper_raw", cmdStepperRaw);
-SerialCommand cmdStepperAttach_("stepper_attach", cmdStepperAttach);
-SerialCommand cmdHello_("ok", cmdHello);
+SmartCommand cmdBalanza_("hx", cmdBalanza);
+SmartCommand cmdDHT_("dht", cmdDHT);
+SmartCommand cmdRegar_("water", cmdRegar);
+SmartCommand cmdStepper_("stepper", cmdStepper);
+SmartCommand cmdServo_("servo", cmdServo);
+SmartCommand cmdPos_("pos", cmdPos);
+SmartCommand cmdStepperRaw_("stepper_raw", cmdStepperRaw);
+SmartCommand cmdStepperAttach_("stepper_attach", cmdStepperAttach);
+SmartCommand cmdHello_("ok", cmdHello);
 
 void setup()
 {
     Serial.begin(9600);
+    pinMode(LED_BUILTIN, OUTPUT);
 
     movement.begin();
+    hx711.begin();
 
-    // dht.begin();
+    dht.begin();
 
-    serialCommands.SetDefaultHandler(cmdUnrecognized);
-    serialCommands.AddCommand(&cmdBalanza_);
-    serialCommands.AddCommand(&cmdDHT_);
-    serialCommands.AddCommand(&cmdRegar_);
-    serialCommands.AddCommand(&cmdStepper_);
-    serialCommands.AddCommand(&cmdServo_);
-    serialCommands.AddCommand(&cmdPos_);
-    serialCommands.AddCommand(&cmdStepperRaw_);
-    serialCommands.AddCommand(&cmdStepperAttach_);
-    serialCommands.AddCommand(&cmdHello_);
+    ss.setDefaultCallback(cmdUnrecognized);
+    ss.addCommand(&cmdBalanza_);
+    ss.addCommand(&cmdDHT_);
+    ss.addCommand(&cmdRegar_);
+    ss.addCommand(&cmdStepper_);
+    ss.addCommand(&cmdServo_);
+    ss.addCommand(&cmdPos_);
+    ss.addCommand(&cmdStepperRaw_);
+    ss.addCommand(&cmdStepperAttach_);
+    ss.addCommand(&cmdHello_);
 }
 
 void loop() {
-    serialCommands.ReadSerial();
+    ss.tick();
     delay(50);
 }
 

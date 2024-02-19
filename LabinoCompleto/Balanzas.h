@@ -1,430 +1,428 @@
-#ifndef BALANZAS_H
-#define BALANZAS_H
+// https://github.com/bogde/MultipleHX711
 
-#include <Arduino.h>
-#include "PROGMEMUtils.h"
+/**
+ *
+ * MultipleHX711 library for Arduino
+ * https://github.com/bogde/MultipleHX711
+ *
+ * MIT License
+ * (c) 2018 Bogdan Necula
+ *
+**/
+#ifndef HX711_REGISTRIES_h
+#define HX711_REGISTRIES_h
 
-#define BALANZAS_ERROR_LOG_STR_MAX_SIZE 128
+#if ARDUINO >= 100
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#endif
 
+// this is only for avr boards, implementation for other archs is needed
+#define PORT_B_NUMBER 2 // == digitalPinToPort(8)
+#define PORT_C_NUMBER 3 // == digitalPinToPort(A0)
+#define PORT_D_NUMBER 4 // == digitalPinToPort(2)
 
-typedef enum HX711_GAIN : uint8_t
-{
-    A128,
-    A64,
-    B32
-} HX711_GAIN;
-
-// function definitions
-static uint8_t shiftInSlow(const byte dataPin, const byte clockPin, const uint8_t bitOrder, const uint8_t delay_us);
-static uint8_t shiftInSlow(const byte dataPin, const byte clockPin, const uint8_t bitOrder);
-template <size_t N, class T> static void shiftInSlowMultiple(uint8_t valueBuffer[N], const byte dataPins[N], const byte clockPin, const uint8_t bitOrder, const uint8_t delay_us);
-template <size_t N, class T> static void shiftInSlowMultiple(uint8_t valueBuffer[N], const byte dataPins[N], const byte clockPin, const uint8_t bitOrder);
-static void pulseSlow(byte clockPin, uint8_t delay_us);
-static void pulseSlow(byte clockPin);
-static long data2long(const uint8_t data[3]);
-static void setGain(const byte sckPin, const HX711_GAIN gain);
-////////////
-
-template <size_t N, class T>
+template<size_t N>
 class MultipleHX711
 {
-private:
-    byte _sckPin;
-    byte _dtPins[N];
-    HX711_GAIN _gain;
+    private:
+        byte PD_SCK;    // Power Down and Serial Clock Input Pin
+        byte *DOUT;        // Serial Data Output Pin
+        byte GAIN;        // amplification factor
 
-    char _errorStr[BALANZAS_ERROR_LOG_STR_MAX_SIZE] = {0};
-    bool _errorFlag = false;
+        bool USE_PORT_B = false;
+        bool USE_PORT_C = false;
+        bool USE_PORT_D = false;
 
-private:
-    bool _indexAllowed(T index, bool showMsg=true)
-    {
-        if (index < N)
-            return true;
-        if (showMsg)
-        {
-            SNPRINTF_FLASH(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, F("ERROR: El indice %i es mayor al maximo indice permitido: %i"), index, N);
-            _errorFlag = true;
-        }
-        return false;
-    }
+    public:
 
-public:
-    MultipleHX711(byte sckPin, byte dtPins[N], HX711_GAIN gain=A128) : _sckPin(sckPin), _gain(gain)
-    {
-        memcpy(_dtPins, dtPins, N * sizeof(byte));
+        MultipleHX711(const byte dout[N], byte pd_sck, byte gain = 128);
 
-        pinMode(_sckPin, OUTPUT);
-        for (T i = 0; i < N; i++)
-        {
-            pinMode(_dtPins[i], INPUT);
-        }
-    }
+        virtual ~MultipleHX711();
 
-    bool isReady(T index)
-    {
-        if (!_indexAllowed(index)) return false;
-        return !digitalRead(_dtPins[index]);
-    }
+        // Initialize library with data output pin, clock input pin and gain factor.
+        // Channel selection is made by passing the appropriate gain:
+        // - With a gain factor of 64 or 128, channel A is selected
+        // - With a gain factor of 32, channel B is selected
+        // The library default is "128" (Channel A).
+        void begin();
 
-    bool isReadyAll()
-    {
-        for (T i = 0; i < N; i++)
-        {
-            if (!isReady(i)) return false;
-        }
-        return true;
-    }
+        // Check if MultipleHX711 is ready
+        // from the datasheet: When output data is not ready for retrieval, digital output pin DOUT is high. Serial clock
+        // input PD_SCK should be low. When DOUT goes to low, it indicates data is ready for retrieval.
+        bool isReady();
 
-    bool waitReady(T index, unsigned long ms=0)
-    {
-        if (!_indexAllowed(index))
-            return false;
-        if (ms == 0)
-        {
-            while(!isReady(index))
-                delay(100);
-            return true;
-        }
-        else
-        {
-            unsigned long initTime = millis();
-            bool ready = isReady(index);
-            while(!ready && abs(millis() - initTime) < ms)
-            {
-                delay(100);
-                ready = isReady(index);
-            }
-            if (!ready)
-            {
-                SNPRINTF_FLASH(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, F("ERROR: La balanza de indice %i no esta lista y se termino el tiempo de espera"), index);
-                _errorFlag = true;
-            }
-            return ready;
-        }
-    }
+        // Wait for the MultipleHX711 to become ready
+        void waitReady(unsigned long delay_ms = 5);
+        bool waitReadyRetry(int retries = 10, unsigned long delay_ms = 5);
+        bool waitReadyTimeout(unsigned long timeout = 5000, unsigned long delay_ms = 5);
 
-    bool waitReadyAll(unsigned long ms=0)
-    {
-        if (ms == 0)
-        {
-            while(!isReadyAll())
-                delay(100);
-            return true;
-        }
-        else
-        {
-            unsigned long initTime = millis();
-            bool ready = isReadyAll();
-            while(!ready && abs(millis() - initTime) < ms)
-            {
-                delay(100);
-                ready = isReadyAll();
-            }
-            if (!ready)
-            {
-                SNPRINTF_FLASH_NO_ARGS(_errorStr, BALANZAS_ERROR_LOG_STR_MAX_SIZE, F("ERROR: No todas las balanzas estan listas y se termino el tiempo de espera"));
-                _errorFlag = true;
-            }
-            return ready;
-        }
-    }
+        // set the gain factor; takes effect only after a call to read()
+        // channel A can be set for a 128 or 64 gain; channel B has a fixed 32 gain
+        // depending on the parameter, the channel is also set to either A or B
+        void setGain(byte gain = 128);
 
-    long read(T index, unsigned long ms=0)
-    {
-        //https://github.com/bogde/HX711/blob/master/src/HX711.cpp
-        // Wait for the chip to become ready.
-        if (!waitReady(index, ms))
-        {
-            _errorFlag = true;
-            return 0;
-        }
+        // waits for the chip to be ready and returns a reading
+        bool read(long values[N], unsigned long timeout=0);
+        bool readAvg(float values[N], uint8_t n, unsigned long timeout=0);
 
-        // Define structures for reading data into.
-        uint8_t data[3] = { 0 };
+        // puts the chip into power down mode
+        void powerDown();
 
-        // Protect the read sequence from system interrupts.  If an interrupt occurs during
-        // the time the PD_SCK signal is high it will stretch the length of the clock pulse.
-        // If the total pulse time exceeds 60 uSec this will cause the HX711 to enter
-        // power down mode during the middle of the read sequence.  While the device will
-        // wake up when PD_SCK goes low again, the reset starts a new conversion cycle which
-        // forces DOUT high until that cycle is completed.
-        
-        // The result is that all subsequent bits read by shiftIn() will read back as 1,
-        // corrupting the value returned by read().  The ATOMIC_BLOCK macro disables
-        // interrupts during the sequence and then restores the interrupt mask to its previous
-        // state after the sequence completes, insuring that the entire read-and-gain-set
-        // sequence is not interrupted.  The macro has a few minor advantages over bracketing
-        // the sequence between `noInterrupts()` and `interrupts()` calls.
-        #if HAS_ATOMIC_BLOCK
-        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-        #else
-        // Disable interrupts.
-        noInterrupts();
-        #endif
-
-        data[2] = shiftInSlow(_dtPins[index], _sckPin, MSBFIRST);
-        data[1] = shiftInSlow(_dtPins[index], _sckPin, MSBFIRST);
-        data[0] = shiftInSlow(_dtPins[index], _sckPin, MSBFIRST);
-
-        // Set the channel and the gain factor for the next reading using the clock pin.
-        setGain(_sckPin, _gain);
-
-        #if HAS_ATOMIC_BLOCK
-        }
-        #else
-        // Enable interrupts again.
-        interrupts();
-        #endif
-
-        return data2long(data);
-    }
-    bool readAll(long valuesBuffer[N], unsigned long ms=0)
-    {
-        uint8_t data[3][N] = { 0 };
-
-        // Wait for the chip to become ready.
-        if (!waitReadyAll(ms))
-        {
-            _errorFlag = true;
-            return 0;   
-        }
-
-        #if HAS_ATOMIC_BLOCK
-        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-        #else
-        // Disable interrupts.
-        noInterrupts();
-        #endif
-
-        shiftInSlowMultiple<N, T>(data[0], _dtPins, _sckPin, MSBFIRST);
-        shiftInSlowMultiple<N, T>(data[1], _dtPins, _sckPin, MSBFIRST);
-        shiftInSlowMultiple<N, T>(data[2], _dtPins, _sckPin, MSBFIRST);
-
-        #if HAS_ATOMIC_BLOCK
-        }
-        #else
-        // Enable interrupts again.
-        interrupts();
-        #endif
-
-        setGain(_sckPin, _gain);
-
-        for (T i = 0; i < N; i++)
-        {
-            const uint8_t dataTemp[3] = {data[0][i], data[1][i], data[2][i]};
-            valuesBuffer[i] = data2long(dataTemp);
-        }
-
-        return true;
-    }
-
-    float readAvg(T index, size_t n=20, unsigned long ms=0)
-    {
-        // https://stackoverflow.com/questions/28820904/how-to-efficiently-compute-average-on-the-fly-moving-average
-        float avg = 0, a, b;
-        for (size_t m = 1; m < n+1; m++)
-        {
-            float newVal = static_cast<float>(read(index, ms));
-            a = 1 / m;
-            b = 1 - a;
-            avg = a * newVal + b * avg;
-        }
-        return avg;
-    }
-
-    bool readAllAvg(float *valuesBuffer, size_t valuesBufferLen, size_t n=20, unsigned long ms=0)
-    {
-        // https://stackoverflow.com/questions/28820904/how-to-efficiently-compute-average-on-the-fly-moving-average
-
-        float a, b;
-        bool readSuccess;
-        long buff[N] = {0};
-        for (size_t m = 1; m < n+1; m++)
-        {
-            a = 1 / m;
-            b = 1 - a;
-            readSuccess = readAll(buff, N);
-            if (!readSuccess) continue;
-            for (T i = 0; i < N; i++)
-            {
-                float newVal = static_cast<float>(buff[i]);
-                valuesBuffer[i] = a * newVal + b * valuesBuffer[i];
-            }
-        }
-
-        return true;
-    }
-
-    void powerDown() const
-    {
-        digitalWrite(_sckPin, LOW);
-        delayMicroseconds(5);
-        digitalWrite(_sckPin, HIGH);
-        delayMicroseconds(5);
-    }
-    void powerUp() const
-    {
-        digitalWrite(_sckPin, LOW);
-        delayMicroseconds(5);
-        for (uint8_t i = 0; i < 24; i++)
-        {
-            pulseSlow(_sckPin);
-        }
-        setGain(_sckPin, _gain);
-    }
-
-    inline bool error() const { return _errorFlag; }
-    inline void printError(Stream *stream)
-    {
-        stream->println(_errorStr);
-        _errorFlag = false;
-        memset(_errorStr, '\0', BALANZAS_ERROR_LOG_STR_MAX_SIZE);
-    }
+        // wakes up the chip after power down mode
+        void powerUp();
 };
 
-////// COSAS DIFICILES ////////
+
+/// cosas dificiles ///
+
+template<size_t N>
+void readPort(bool states[N], const uint8_t dout[N], bool portB, bool portC, bool portD)
+{
+    uint8_t valsB=0, valsC=0, valsD=0;
+    if (portB)
+        valsB = PINB;
+    if (portC)
+        valsC = PINC;
+    if (portD)
+        valsD = PIND;
+
+    for (size_t i = 0; i < N; i++)
+    {
+        uint8_t port = digitalPinToPort(dout[i]);
+        uint8_t mask = digitalPinToBitMask(dout[i]);
+        if (port == PORT_B_NUMBER)
+            states[i] = (bool)(valsB & mask);
+        else if (port == PORT_C_NUMBER)
+            states[i] = (bool)(valsC & mask);
+        else if (port == PORT_D_NUMBER)
+            states[i] = (bool)(valsD & mask);
+    }
+}
+
+#define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
+
+// TEENSYDUINO has a port of Dean Camera's ATOMIC_BLOCK macros for AVR to ARM Cortex M3.
+#define HAS_ATOMIC_BLOCK (defined(ARDUINO_ARCH_AVR) || defined(TEENSYDUINO))
+
+// Whether we are running on either the ESP8266 or the ESP32.
+#define ARCH_ESPRESSIF (defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32))
+
+// Whether we are actually running on FreeRTOS.
+#define IS_FREE_RTOS defined(ARDUINO_ARCH_ESP32)
+
+// Define macro designating whether we're running on a reasonable
+// fast CPU and so should slow down sampling from GPIO.
+#define FAST_CPU \
+    ( \
+    ARCH_ESPRESSIF || \
+    defined(ARDUINO_ARCH_SAM)     || defined(ARDUINO_ARCH_SAMD) || \
+    defined(ARDUINO_ARCH_STM32)   || defined(TEENSYDUINO) \
+    )
 
 #if HAS_ATOMIC_BLOCK
 // Acquire AVR-specific ATOMIC_BLOCK(ATOMIC_RESTORESTATE) macro.
 #include <util/atomic.h>
 #endif
 
+#if FAST_CPU
+// Make shiftIn() be aware of clockspeed for
+// faster CPUs like ESP32, Teensy 3.x and friends.
+// See also:
+// - https://github.com/bogde/MultipleHX711/issues/75
+// - https://github.com/arduino/Arduino/issues/6561
+// - https://community.hiveeyes.org/t/using-bogdans-canonical-hx711-library-on-the-esp32/539
 
-# ifdef SHIFTIN_SLOW
-static uint8_t shiftInSlow(const byte dataPin, const byte clockPin, const uint8_t bitOrder, const uint8_t delay_us=2) {
-    uint8_t value = 0;
+template<size_t N>
+void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, uint8_t bitOrder, bool portB, bool portC, bool portD) {
+    uint8_t i;
+    bool states[2];
+    memset(values, 0, N*sizeof(uint8_t));
 
-    for(uint8_t i = 0; i < 8; ++i) {
+    for(i = 0; i < 8; ++i) {
         digitalWrite(clockPin, HIGH);
-        delayMicroseconds(delay_us);
+        delayMicroseconds(1);
+
+        // read
+        readPort<N>(states, dataPin, portB, portC, portD);
         if(bitOrder == LSBFIRST)
-            value |= digitalRead(dataPin) << i;
+        {
+            values[0] |= states[0] << i;
+            values[1] |= states[1] << i;
+        }
         else
-            value |= digitalRead(dataPin) << (7 - i);
-        digitalWrite(clockPin, LOW);
-        delayMicroseconds(delay_us);
-    }
-    return value;
-}
-template <size_t N, class T>
-static void shiftInSlowMultiple(uint8_t valueBuffer[N], const byte dataPins[N], const byte clockPin, const uint8_t bitOrder, const uint8_t delay_us=2)
-{
-    // valueBuffer HAS TO BE THE SAME LENGTH AS dataPins (or longer)
-    uint8_t values[N] = {0};
-
-    for(uint8_t i = 0; i < 8; ++i)
-    {
-        digitalWrite(clockPin, HIGH);
-        delayMicroseconds(delay_us);
-        for (T j = 0; j < N; j++)
         {
-            if(bitOrder == LSBFIRST)
-                valueBuffer[j] |= digitalRead(dataPin) << i;
-            else
-                valueBuffer[j] |= digitalRead(dataPin) << (7 - i);
+            values[0] |= states[0] << (7 - i);
+            values[1] |= states[1] << (7 - i);
         }
         digitalWrite(clockPin, LOW);
-        delayMicroseconds(delay_us);
+        delayMicroseconds(1);
     }
 }
-static void pulseSlow(byte clockPin, uint8_t delay_us=2)
-{
-    digitalWrite(clockPin, HIGH);
-    delayMicroseconds(delay_us);
-    digitalWrite(clockPin, LOW);
-    delayMicroseconds(delay_us);
-}
-// #define SHIFTIN_WITH_SPEED_SUPPORT(data,clock,order,delay_us) shiftInSlow(data,clock,order,delay_us)
-// #define SHIFTIN_WITH_SPEED_SUPPORT(data,clock,order) shiftInSlow(data,clock,order)
-// #define SHIFTIN_MULTIPLE_WITH_SPEED_SUPPORT(N,T,buffer,datas,clock,order,delay_us) shiftInSlowMultiple<N, T>(buffer,datas,clock,order,delay_us)
-// #define SHIFTIN_MULTIPLE_WITH_SPEED_SUPPORT(N,T,buffer,datas,clock,order) shiftInSlowMultiple<N, T>(buffer,datas,clock,order)
-// #define PULSE_WITH_SPEED_SUPPORT(clock,delay_us) pulseSlow(clock,delay_us)
-// #define PULSE_WITH_SPEED_SUPPORT(clock) pulseSlow(clock)
 #else
-static uint8_t shiftInSlow(const byte dataPin, const byte clockPin, const uint8_t bitOrder, const uint8_t delay_us) {
-    return shiftIn(dataPin, clockPin, bitOrder);
-}
-static uint8_t shiftInSlow(const byte dataPin, const byte clockPin, const uint8_t bitOrder) {
-    return shiftIn(dataPin, clockPin, bitOrder);
-}
+template<size_t N>
+void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, uint8_t bitOrder, bool portB, bool portC, bool portD) {
+    uint8_t i;
+    bool states[2];
+    memset(values, 0, N*sizeof(uint8_t));
 
-template <size_t N, class T>
-static void shiftInSlowMultiple(uint8_t valueBuffer[N], const byte dataPins[N], const byte clockPin, const uint8_t bitOrder)
-{
-    // valueBuffer HAS TO BE THE SAME LENGTH AS dataPins (or longer)
-    uint8_t values[N] = {0};
-
-    for(uint8_t i = 0; i < 8; ++i)
-    {
+    for(i = 0; i < 8; ++i) {
         digitalWrite(clockPin, HIGH);
-        for (T j = 0; j < N; j++)
+
+        // read
+        readPort<N>(states, dataPin, portB, portC, portD);
+        if(bitOrder == LSBFIRST)
         {
-            if(bitOrder == LSBFIRST)
-                valueBuffer[j] |= digitalRead(dataPins[j]) << i;
-            else
-                valueBuffer[j] |= digitalRead(dataPins[j]) << (7 - i);
+            values[0] |= states[0] << i;
+            values[1] |= states[1] << i;
+        }
+        else
+        {
+            values[0] |= states[0] << (7 - i);
+            values[1] |= states[1] << (7 - i);
         }
         digitalWrite(clockPin, LOW);
     }
 }
-static void pulseSlow(byte clockPin)
-{
-    digitalWrite(clockPin, HIGH);
-    digitalWrite(clockPin, LOW);
-}
-static void pulseSlow(byte clockPin, uint8_t delay_us)
-{
-    digitalWrite(clockPin, HIGH);
-    digitalWrite(clockPin, LOW);
-}
-// #define SHIFTIN_WITH_SPEED_SUPPORT(data,clock,order,delay_us) shiftIn(data,clock,order)
-// #define SHIFTIN_WITH_SPEED_SUPPORT(data,clock,order) shiftIn(data,clock,order)
-// #define SHIFTIN_MULTIPLE_WITH_SPEED_SUPPORT(buffer,datas,nData,clock,order,delay_us) shiftInMultiple(buffer,datas,nData,clock,order)
-// #define SHIFTIN_MULTIPLE_WITH_SPEED_SUPPORT(buffer,datas,nData,clock,order) shiftInMultiple(buffer,datas,nData,clock,order)
-// #define PULSE_WITH_SPEED_SUPPORT(clock,delay_us) pulseFast(clock)
-// #define PULSE_WITH_SPEED_SUPPORT(clock) pulseFast(clock)
 #endif
 
-static long data2long(const uint8_t data[3])
+#if ARCH_ESPRESSIF
+// ESP8266 doesn't read values between 0x20000 and 0x30000 when DOUT is pulled up.
+#define DOUT_MODE INPUT
+#else
+#define DOUT_MODE INPUT_PULLUP
+#endif
+
+template<size_t N>
+MultipleHX711<N>::MultipleHX711(const byte dout[N], byte pd_sck, byte gain)
 {
-    unsigned long value = 0;
-    uint8_t filler = 0x00;
+    PD_SCK = pd_sck;
+    DOUT = dout;
 
-    // Replicate the most significant bit to pad out a 32-bit signed integer
-	if (data[2] & 0x80) {
-		filler = 0xFF;
-	} else {
-		filler = 0x00;
-	}
+    for (size_t i = 0; i < N; i++)
+    {
+        uint8_t port = digitalPinToPort(DOUT[i]);
+        if (port == PORT_B_NUMBER) USE_PORT_B = true;
+        else if (port == PORT_C_NUMBER) USE_PORT_C = true;
+        else if (port == PORT_D_NUMBER) USE_PORT_D = true;
+    }
 
-	// Construct a 32-bit signed integer
-	value = ( static_cast<unsigned long>(filler) << 24
-			| static_cast<unsigned long>(data[2]) << 16
-			| static_cast<unsigned long>(data[1]) << 8
-			| static_cast<unsigned long>(data[0]) );
-
-	return static_cast<long>(value);
+    setGain(gain);
 }
 
-static void setGain(const byte sckPin, const HX711_GAIN gain)
-{
-    // Set the channel and the gain factor for the next reading using the clock pin.
-    switch(gain)
+template<size_t N>
+MultipleHX711<N>::~MultipleHX711() {
+}
+
+template<size_t N>
+void MultipleHX711<N>::begin() {
+    pinMode(PD_SCK, OUTPUT);
+    for (size_t i = 0; i < N; i++)
     {
-        case A64:
-            pulseSlow(sckPin);
-        case B32:
-            pulseSlow(sckPin);
-        case A128:
-            pulseSlow(sckPin);
-            break;  
-        default:
-            pulseSlow(sckPin);
-            pulseSlow(sckPin);
-            pulseSlow(sckPin);
+        pinMode(DOUT[i], DOUT_MODE);
+    }
+}
+
+template<size_t N>
+bool MultipleHX711<N>::isReady() {
+    // return digitalRead(DOUT) == LOW;
+    bool states[2];
+    readPort<N>(states, DOUT, USE_PORT_B, USE_PORT_C, USE_PORT_D);
+    return !states[0] && !states[1];
+}
+
+template<size_t N>
+void MultipleHX711<N>::setGain(byte gain) {
+    switch (gain) {
+        case 128:        // channel A, gain factor 128
+            GAIN = 1;
+            break;
+        case 64:        // channel A, gain factor 64
+            GAIN = 3;
+            break;
+        case 32:        // channel B, gain factor 32
+            GAIN = 2;
             break;
     }
+
 }
 
-#endif
+template<size_t N>
+bool MultipleHX711<N>::read(long values[N], unsigned long timeout=0) {
+
+    // Wait for the chip to become ready.
+    if (timeout == 0)
+        waitReady();
+    else
+    {
+        if (!waitReadyTimeout(timeout))
+            return false;
+    }
+
+    // Define structures for reading data into.
+    unsigned long preValues[N] = {0};
+    uint8_t data[3][N] = { 0 };
+    uint8_t filler[N] = {0x00};
+
+    // Protect the read sequence from system interrupts.  If an interrupt occurs during
+    // the time the PD_SCK signal is high it will stretch the length of the clock pulse.
+    // If the total pulse time exceeds 60 uSec this will cause the MultipleHX711 to enter
+    // power down mode during the middle of the read sequence.  While the device will
+    // wake up when PD_SCK goes low again, the reset starts a new conversion cycle which
+    // forces DOUT high until that cycle is completed.
+    //
+    // The result is that all subsequent bits read by shiftIn() will read back as 1,
+    // corrupting the value returned by read().  The ATOMIC_BLOCK macro disables
+    // interrupts during the sequence and then restores the interrupt mask to its previous
+    // state after the sequence completes, insuring that the entire read-and-gain-set
+    // sequence is not interrupted.  The macro has a few minor advantages over bracketing
+    // the sequence between `noInterrupts()` and `interrupts()` calls.
+    #if HAS_ATOMIC_BLOCK
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+
+    #elif IS_FREE_RTOS
+    // Begin of critical section.
+    // Critical sections are used as a valid protection method
+    // against simultaneous access in vanilla FreeRTOS.
+    // Disable the scheduler and call portDISABLE_INTERRUPTS. This prevents
+    // context switches and servicing of ISRs during a critical section.
+    portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+    portENTER_CRITICAL(&mux);
+
+    #else
+    // Disable interrupts.
+    noInterrupts();
+    #endif
+
+    // Pulse the clock pin 24 times to read the data.
+    shiftInSlow<N>(data[2], DOUT, PD_SCK, MSBFIRST, USE_PORT_B, USE_PORT_C, USE_PORT_D);
+    shiftInSlow<N>(data[1], DOUT, PD_SCK, MSBFIRST, USE_PORT_B, USE_PORT_C, USE_PORT_D);
+    shiftInSlow<N>(data[0], DOUT, PD_SCK, MSBFIRST, USE_PORT_B, USE_PORT_C, USE_PORT_D);
+
+    // Set the channel and the gain factor for the next reading using the clock pin.
+    for (unsigned int i = 0; i < GAIN; i++) {
+        digitalWrite(PD_SCK, HIGH);
+        #if ARCH_ESPRESSIF
+        delayMicroseconds(1);
+        #endif
+        digitalWrite(PD_SCK, LOW);
+        #if ARCH_ESPRESSIF
+        delayMicroseconds(1);
+        #endif
+    }
+
+    #if IS_FREE_RTOS
+    // End of critical section.
+    portEXIT_CRITICAL(&mux);
+
+    #elif HAS_ATOMIC_BLOCK
+    }
+
+    #else
+    // Enable interrupts again.
+    interrupts();
+    #endif
+
+    for (size_t i = 0; i < N; i++)
+    {
+        // Replicate the most significant bit to pad out a 32-bit signed integer
+        if (data[2][i] & 0x80) {
+            filler[i] = 0xFF;
+        } else {
+            filler[i] = 0x00;
+        }
+
+        // Construct a 32-bit signed integer
+        preValues[i] = ( static_cast<unsigned long>(filler[i]) << 24
+                | static_cast<unsigned long>(data[2][i]) << 16
+                | static_cast<unsigned long>(data[1][i]) << 8
+                | static_cast<unsigned long>(data[0][i]) );
+
+        values[i] = static_cast<long>(preValues[i]);
+    }
+
+    return true;
+}
+
+template<size_t N>
+bool MultipleHX711<N>::readAvg(float values[N], uint8_t n, unsigned long timeout=0)
+{
+    bool readSuccess;
+    long raw[N];
+    long sums[N] = {0};
+    uint8_t nReads = 0;
+    for (uint8_t i = 0; i < n; i++)
+    {
+        readSuccess = read(raw, timeout);
+        if (!readSuccess) continue;
+
+        for (size_t j = 0; j < N; j++)
+            sums[j] += raw[j];
+        ++nReads;
+
+        #ifdef ARCH_ESPRESSIF
+        delay(0);
+        #endif
+    }
+
+    for (size_t i = 0; i < N; i++)
+        values[i] = sums[i] / nReads;
+
+    return (bool)nReads;
+}
+
+template<size_t N>
+void MultipleHX711<N>::waitReady(unsigned long delay_ms) {
+    // Wait for the chip to become ready.
+    // This is a blocking implementation and will
+    // halt the sketch until a load cell is connected.
+    while (!isReady()) {
+        // Probably will do no harm on AVR but will feed the Watchdog Timer (WDT) on ESP.
+        // https://github.com/bogde/MultipleHX711/issues/73
+        delay(delay_ms);
+    }
+}
+
+template<size_t N>
+bool MultipleHX711<N>::waitReadyRetry(int retries, unsigned long delay_ms) {
+    // Wait for the chip to become ready by
+    // retrying for a specified amount of attempts.
+    // https://github.com/bogde/MultipleHX711/issues/76
+    int count = 0;
+    while (count < retries) {
+        if (isReady()) {
+            return true;
+        }
+        delay(delay_ms);
+        count++;
+    }
+    return false;
+}
+
+template<size_t N>
+bool MultipleHX711<N>::waitReadyTimeout(unsigned long timeout, unsigned long delay_ms) {
+    // Wait for the chip to become ready until timeout.
+    // https://github.com/bogde/MultipleHX711/pull/96
+    unsigned long millisStarted = millis();
+    while (millis() - millisStarted < timeout) {
+        if (isReady()) {
+            return true;
+        }
+        delay(delay_ms);
+    }
+    return false;
+}
+
+template<size_t N>
+void MultipleHX711<N>::powerDown() {
+    digitalWrite(PD_SCK, LOW);
+    digitalWrite(PD_SCK, HIGH);
+}
+
+template<size_t N>
+void MultipleHX711<N>::powerUp() {
+    digitalWrite(PD_SCK, LOW);
+}
+
+#endif /* HX711_REGISTRIES_h */
