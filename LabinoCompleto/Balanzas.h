@@ -348,8 +348,23 @@ bool MultipleHX711<N>::read(long values[N], unsigned long timeout=0) {
 template<size_t N>
 bool MultipleHX711<N>::readAvg(float values[N], uint8_t n, unsigned long timeout=0)
 {
+    if (n == 0) return false;
+
     bool readSuccess;
     long raw[N];
+
+    if (n == 1)
+    {
+        readSuccess = read(raw);
+        if (!readSuccess)
+            return false;
+        for (size_t i = 0; i < N; i++)
+        {
+            values[i] = static_cast<float>(raw[i]);
+        }
+        return true;
+    }
+
     long sums[N] = {0};
     uint8_t nReads = 0;
     for (uint8_t i = 0; i < n; i++)

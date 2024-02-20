@@ -6,11 +6,12 @@
 #include "MovementManager.h"
 #include "PWMHelper.h"
 
+#define RCV_COMMAND "rcv"
 #define ARR_LEN(a) sizeof(a)/sizeof(a[0])
 
 // pins
 const byte sckPin = 2;
-const byte dataPins[] = {5, A4};
+const byte dataPins[] = {5, 6};
 const byte dhtPin = 4;
 const byte driverPins[4] = {8, 9, 10, 11}; // in1, in2, in3, in4
 const byte servoPin = 7;
@@ -35,10 +36,14 @@ MovementManager<nPosiciones> movement(
 PWMPin pump(pumpPin, percent2dutyCycleI(50));
 
 bool water(Stream *stream, size_t index, unsigned long tiempo, uint8_t intensidad, bool returnHome=true);
+void pumpForTime(unsigned long tiempo, uint8_t intensidad);
 
 #define LED_ON() digitalWrite(LED_BUILTIN, HIGH)
 #define LED_OFF() digitalWrite(LED_BUILTIN, LOW)
 
+// if the command execution can take some time, the word "rcv" is sent before the execution to
+// notify the command has been received and processed
+void rcv(Stream *stream) { stream->println(F(RCV_COMMAND)); }
 void cmdUnrecognized(Stream *stream, const char* cmd)
 {
     LED_ON();
@@ -50,24 +55,55 @@ void cmdUnrecognized(Stream *stream, const char* cmd)
 
 void cmdBalanza(Stream *stream, CommandArguments *comArgs)
 {
-    // cmd: hx
+    // cmd: hx <int:n>
     // respuesta: [12,34,56,78,...]
     // devuelve los datos de la balanza
 
     // devuelve todas las balanzas
 
     LED_ON();
-    long values[nBalanzas];
-    bool s = hx711.read(values);
+
+    uint8_t n;
+    if (comArgs->N == 0)
+        n = 1;
+    else
+    {
+        // check if it is a number
+        long int nArg;
+        bool isInt = comArgs->toInt(0, &nArg);
+
+        if (!isInt)
+        {
+            stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+            stream->println(comArgs->arg(0));
+            LED_OFF();
+            return;
+        }
+
+        if (nArg < 1 || nArg > 255)
+        {
+            stream->print(F("ERROR: El argumento debe ser un numero entre 1 y 255. El argumento es "));
+            stream->println(nArg);
+            LED_OFF();
+            return;
+        }
+
+        n = static_cast<uint8_t>(nArg);
+    }
+    
+    rcv(stream);
+
+    float values[nBalanzas];
+    bool s = hx711.readAvg(values, n, 1000);
     if (!s)
     {
         stream->println(F("ERROR: No se pudo leer las balanzas"));
         LED_OFF();
         return;
     }
+    stream->print('[');
     for (size_t i = 0; i < nBalanzas; i++)
     {
-        stream->print('[');
         stream->print(values[i]);
         if (i < nBalanzas-1)
             stream->print(',');
@@ -125,11 +161,16 @@ void cmdRegar(Stream *stream, CommandArguments *comArgs)
         return;
     }
 
+    rcv(stream);
+
     // regar con esas especificaciones
     bool res = water(stream, index, tiempo, intensidad);
 
     if (res)
         stream->println(F("OK"));
+    // no hace falta porque la funcoin water() ya toma stream como parametro y le imprime errores
+    // else
+    //     stream->println(F("ERROR: Surgio un error regando"));
 
     LED_OFF();
 }
@@ -142,7 +183,7 @@ void cmdStepper(Stream *stream, CommandArguments *comArgs)
     // Si se transmitio un argumento, este debe ser el indice de la posicion a la que se quiere llevar el stepper
 
     LED_ON();
-    if (comArgs->N == 1)
+    if (comArgs->N > 0)
     {
         // check if it is a number
         long int index;
@@ -164,6 +205,8 @@ void cmdStepper(Stream *stream, CommandArguments *comArgs)
             LED_OFF();
             return;
         }
+
+        rcv(stream);
 
         bool success = movement.stepperGoToPosition(index);
 
@@ -187,7 +230,7 @@ void cmdServo(Stream *stream, CommandArguments *comArgs)
     // caso, devuelve el angulo final del servo
 
     LED_ON();
-    if (comArgs->N == 1)
+    if (comArgs->N > 0)
     {
         // check if is all numbers
         long int angle;
@@ -199,7 +242,7 @@ void cmdServo(Stream *stream, CommandArguments *comArgs)
             LED_OFF();
             return;
         }
-        else if (angle <= SERVO_MIN_ANGLE && angle >= SERVO_MAX_ANGLE)
+        else if (angle <= SERVO_MIN_ANGLE || angle >= SERVO_MAX_ANGLE) // puse && en vez de || me quiero morir :(
         {
             stream->print(F("ERROR: El argumento es un numero menor a "));
             stream->print(SERVO_MIN_ANGLE);
@@ -211,11 +254,60 @@ void cmdServo(Stream *stream, CommandArguments *comArgs)
             return;
         }
 
+        rcv(stream);
         movement.servoGoToAngle(angle);
     }
 
     stream->println(movement.getServoAngle());
     LED_OFF();
+}
+
+void cmdPump(Stream *stream, CommandArguments *comArgs)
+{
+    // cmd: pump <int:time> <int:intensidad>
+    // respuesta: OK
+
+    LED_ON();
+    if (comArgs->N < 2)
+    {
+        stream->println(F("ERROR: No se proporcinaron al menos dos argumentos numericos."));
+        LED_OFF();
+        return;
+    }
+
+    // check if it is a number
+    long int tiempo;
+    bool isIntTiempo = comArgs->toInt(0, &tiempo);
+    if (!isIntTiempo)
+    {
+        stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+        stream->println(comArgs->arg(0));
+        LED_OFF();
+        return;
+    }
+
+    long int intensidadArg;
+    bool isIntIntensidad = comArgs->toInt(1, &intensidadArg);
+    if (!isIntIntensidad)
+    {
+        stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+        stream->println(comArgs->arg(1));
+        LED_OFF();
+        return;
+    }
+    if (intensidadArg < 0 || intensidadArg > 255) // y por que aca si puse || y no &&??? >:(
+    {
+        stream->print(F("ERROR: El argumento debe ser un numero entre 0 y 255. El argumento es "));
+        stream->println(intensidadArg);
+        LED_OFF();
+        return;
+    }
+    uint8_t intensidad = static_cast<uint8_t>(intensidadArg);
+
+    rcv(stream);
+    pumpForTime(tiempo, intensidad);
+
+    stream->println(F("OK"));
 }
 
 void cmdPos(Stream *stream, CommandArguments *comArgs)
@@ -235,6 +327,7 @@ void cmdPos(Stream *stream, CommandArguments *comArgs)
     bool success;
     if (strcmp(comArgs->arg(0), "home") == 0)
     {
+        rcv(stream);
         bool s1 = movement.servoGoHome();
         bool s2 = movement.stepperGoHome();
         success = s1 && s2;
@@ -263,6 +356,7 @@ void cmdPos(Stream *stream, CommandArguments *comArgs)
             return;
         }
 
+        rcv(stream);
         bool s1 = movement.stepperGoToPosition(index);
         bool s2 = movement.servoGoToPosition(index);
         success = s1 && s2;
@@ -302,16 +396,17 @@ void cmdStepperRaw(Stream *stream, CommandArguments *comArgs)
         return;
     }
 
+    rcv(stream);
     bool success = movement.stepperGoToStep(step);
 
     if (!success)
     {
         movement.printError(stream);
-        LED_OFF();
-        return;
     }
-
-    stream->println(movement.getStepperStep());
+    else
+    {
+        stream->println(movement.getStepperStep());
+    }
     LED_OFF();
 }
 
@@ -341,13 +436,14 @@ void cmdStepperAttach(Stream *stream, CommandArguments *comArgs)
         return;
     }
 
+    rcv(stream);
     movement.stepperAttach(attach);
 
     stream->println(attach ? F("1") : F("0"));
     LED_OFF();
 }
 
-void cmdHello(Stream *stream, CommandArguments *comArgs)
+void cmdOK(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: ok
     // respuesta: OK
@@ -366,14 +462,16 @@ SmartCommand cmdRegar_("water", cmdRegar);
 SmartCommand cmdStepper_("stepper", cmdStepper);
 SmartCommand cmdServo_("servo", cmdServo);
 SmartCommand cmdPos_("pos", cmdPos);
+SmartCommand cmdPump_("pump", cmdPump);
 SmartCommand cmdStepperRaw_("stepper_raw", cmdStepperRaw);
 SmartCommand cmdStepperAttach_("stepper_attach", cmdStepperAttach);
-SmartCommand cmdHello_("ok", cmdHello);
+SmartCommand cmdOK_("ok", cmdOK);
 
 void setup()
 {
     Serial.begin(9600);
     pinMode(LED_BUILTIN, OUTPUT);
+    LED_ON();
 
     movement.begin();
     hx711.begin();
@@ -387,9 +485,13 @@ void setup()
     ss.addCommand(&cmdStepper_);
     ss.addCommand(&cmdServo_);
     ss.addCommand(&cmdPos_);
+    ss.addCommand(&cmdPump_);
     ss.addCommand(&cmdStepperRaw_);
     ss.addCommand(&cmdStepperAttach_);
-    ss.addCommand(&cmdHello_);
+    ss.addCommand(&cmdOK_);
+
+    Serial.println("begin");
+    LED_OFF();
 }
 
 void loop() {
@@ -397,6 +499,15 @@ void loop() {
     delay(50);
 }
 
+void pumpForTime(unsigned long tiempo, uint8_t intensidad)
+{
+    pump.setPercent(intensidad);
+    pump.state(true);
+
+    delay(tiempo);
+
+    pump.state(false);
+}
 
 bool water(Stream *stream, size_t index, unsigned long tiempo, uint8_t intensidad, bool returnHome=true)
 {
@@ -431,12 +542,7 @@ bool water(Stream *stream, size_t index, unsigned long tiempo, uint8_t intensida
         return false;
     }
 
-    pump.setPercent(intensidad);
-    pump.state(true);
-
-    delay(tiempo);
-
-    pump.state(false);
+    pumpForTime(tiempo, intensidad);
 
     if (returnHome)
     {
