@@ -82,7 +82,7 @@ arduino-cli board list
 Ahora podemos cargar el programa compilado a la tarjeta con el siguiente comando, donde ```/dev/ttyUSB0``` es el puerto serial al que está conectada la tarjeta
 
 ```bash
-arduino-cli upload --fqbn $FQBN -p /dev/ttyUSB0 .
+arduino-cli upload --fqbn $FQBN -p /dev/ttyACM0 .
 ```
 
 ## API
