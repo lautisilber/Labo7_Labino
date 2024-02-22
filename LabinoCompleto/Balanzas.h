@@ -164,7 +164,7 @@ void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, 
 template<size_t N>
 void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, uint8_t bitOrder, bool portB, bool portC, bool portD) {
     uint8_t i;
-    bool states[2];
+    bool states[N];
     memset(values, 0, N*sizeof(uint8_t));
 
     for(i = 0; i < 8; ++i) {
@@ -174,13 +174,13 @@ void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, 
         readPort<N>(states, dataPin, portB, portC, portD);
         if(bitOrder == LSBFIRST)
         {
-            values[0] |= states[0] << i;
-            values[1] |= states[1] << i;
+            for (size_t j = 0; j < N; j++)
+                values[j] |= states[j] << i;
         }
         else
         {
-            values[0] |= states[0] << (7 - i);
-            values[1] |= states[1] << (7 - i);
+            for (size_t j = 0; j < N; j++)
+                values[j] |= states[j] << (7 - i);
         }
         digitalWrite(clockPin, LOW);
     }
