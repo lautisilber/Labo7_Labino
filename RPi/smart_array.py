@@ -120,8 +120,11 @@ class SmartArray:
     def __iter__(self):
         return iter(self.arr)
     
-    def __getitem__(self, item: int) -> Union[int, float]:
-        return self.arr[item]
+    def __getitem__(self, key: int) -> Union[int, float]:
+        return self.arr[key]
+    
+    def __setitem__(self, key: int, value: Union[int, float]):
+        self.arr[key] = value
     
     def bool(self, t: Optional[typecode_t]=None) -> SmartArray:
         t = 'B' if t is None else t
@@ -298,4 +301,6 @@ if __name__ == '__main__':
     a = SmartArray([1, 2, 3])
     b = SmartArray([4, 5, 6])
 
-    print(a+b)
+    a[1] += 10
+
+    print(a)
