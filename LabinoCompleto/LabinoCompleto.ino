@@ -113,6 +113,16 @@ void cmdBalanza(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
+void cmdNBalanzas(Stream *stream, CommandArguments *comArgs)
+{
+    // cmd: hx_n
+    // respuesta: la cantidad de balanzas
+
+    LED_ON();
+    stream->println(nBalanzas);
+    LED_OFF();
+}
+
 void cmdDHT(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: dht
@@ -131,7 +141,7 @@ void cmdDHT(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
-void cmdRegar(Stream *stream, CommandArguments *comArgs)
+void cmdWater(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: water <int:index> <int:tiempo> <int:intensidad>
     // respuesta: ok
@@ -177,17 +187,17 @@ void cmdRegar(Stream *stream, CommandArguments *comArgs)
 
 void cmdStepper(Stream *stream, CommandArguments *comArgs)
 {
-    // cmd: stepper ?<int:index>
+    // cmd: stepper ?<int:posicion>
     // respuesta: <int:posicion>
     // Devuelve la posicion actual del stepper del sistema de riego
-    // Si se transmitio un argumento, este debe ser el indice de la posicion a la que se quiere llevar el stepper
+    // Si se transmitio un argumento, este debe ser uint32_t y es el paso al que se debe llevar el stepper
 
     LED_ON();
     if (comArgs->N > 0)
     {
-        // check if it is a number
-        long int index;
-        bool isInt = comArgs->toInt(0, &index);
+        // check if is a number
+        long int step;
+        bool isInt = comArgs->toInt(0, &step);
 
         if (!isInt)
         {
@@ -196,22 +206,12 @@ void cmdStepper(Stream *stream, CommandArguments *comArgs)
             LED_OFF();
             return;
         }
-        else if (index < 0 || index > nPosiciones)
-        {
-            stream->print(F("ERROR: El argumento es un numero menor a 0 o mayor a "));
-            stream->print(nPosiciones-1);
-            stream->print(F(". El numero del argumento es "));
-            stream->println(index);
-            LED_OFF();
-            return;
-        }
 
         rcv(stream);
-
-        bool success = movement.stepperGoToPosition(index);
-
+        bool success = movement.stepperGoToStep(step);
         if (!success)
         {
+            movement.printError(stream);
             movement.printError(stream);
             LED_OFF();
             return;
@@ -264,13 +264,13 @@ void cmdServo(Stream *stream, CommandArguments *comArgs)
 
 void cmdPump(Stream *stream, CommandArguments *comArgs)
 {
-    // cmd: pump <int:time> <int:intensidad>
+    // cmd: pump <int:tiempo> <int:intensidad>
     // respuesta: OK
 
     LED_ON();
     if (comArgs->N < 2)
     {
-        stream->println(F("ERROR: No se proporcinaron al menos dos argumentos numericos."));
+        stream->println(F("ERROR: No se proporcinaron dos argumentos numericos."));
         LED_OFF();
         return;
     }
@@ -369,47 +369,6 @@ void cmdPos(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
-void cmdStepperRaw(Stream *stream, CommandArguments *comArgs)
-{
-    // cmd: stepper_raw <int:index>
-    // respuesta: <int:posicion>
-    // Devuelve la posicion actual del stepper del sistema de riego
-    // Si se transmitio un argumento, este debe ser uint32_t y es el paso al que se debe llevar el stepper
-
-    LED_ON();
-    if (comArgs->N == 0)
-    {
-        stream->println(F("ERROR: No se proporcino un argumento numerico."));
-        LED_OFF();
-        return;
-    }
-
-    // check if is a number
-    long int step;
-    bool isInt = comArgs->toInt(0, &step);
-
-    if (!isInt)
-    {
-        stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
-        stream->println(comArgs->arg(0));
-        LED_OFF();
-        return;
-    }
-
-    rcv(stream);
-    bool success = movement.stepperGoToStep(step);
-
-    if (!success)
-    {
-        movement.printError(stream);
-    }
-    else
-    {
-        stream->println(movement.getStepperStep());
-    }
-    LED_OFF();
-}
-
 void cmdStepperAttach(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: stepper_attach <bool:attach>
@@ -443,6 +402,39 @@ void cmdStepperAttach(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
+void cmdServoAttach(Stream *stream, CommandArguments *comArgs)
+{
+    // cmd: servo_attach <bool:attach>
+    // respuesta: OK
+    // Si attach es 1, fija el servo a la posicion actual. Si attach es 0, suelta el servo
+
+    LED_ON();
+    if (comArgs->N == 0)
+    {
+        stream->println(F("ERROR: No se proporcino un argumento booleano."));
+        LED_OFF();
+        return;
+    }
+
+    // check if is a number
+    bool attach;
+    bool isBool = comArgs->toBool(0, &attach);
+
+    if (!isBool)
+    {
+        stream->print(F("ERROR: El argumento no es un valor booleano. El argumento es "));
+        stream->println(comArgs->arg(0));
+        LED_OFF();
+        return;
+    }
+
+    rcv(stream);
+    movement.servoAttach(attach);
+
+    stream->println(attach ? F("1") : F("0"));
+    LED_OFF();
+}
+
 void cmdOK(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: ok
@@ -457,14 +449,15 @@ void cmdOK(Stream *stream, CommandArguments *comArgs)
 SmartSerial ss(&Serial);
 
 SmartCommand cmdBalanza_("hx", cmdBalanza);
+SmartCommand cmdNBalanzas_("hx_n", cmdNBalanzas);
 SmartCommand cmdDHT_("dht", cmdDHT);
-SmartCommand cmdRegar_("water", cmdRegar);
+SmartCommand cmdWater_("water", cmdWater);
 SmartCommand cmdStepper_("stepper", cmdStepper);
 SmartCommand cmdServo_("servo", cmdServo);
 SmartCommand cmdPos_("pos", cmdPos);
 SmartCommand cmdPump_("pump", cmdPump);
-SmartCommand cmdStepperRaw_("stepper_raw", cmdStepperRaw);
 SmartCommand cmdStepperAttach_("stepper_attach", cmdStepperAttach);
+SmartCommand cmdServoAttach_("servo_attach", cmdServoAttach);
 SmartCommand cmdOK_("ok", cmdOK);
 
 void setup()
@@ -480,14 +473,15 @@ void setup()
 
     ss.setDefaultCallback(cmdUnrecognized);
     ss.addCommand(&cmdBalanza_);
+    ss.addCommand(&cmdNBalanzas_);
     ss.addCommand(&cmdDHT_);
-    ss.addCommand(&cmdRegar_);
+    ss.addCommand(&cmdWater_);
     ss.addCommand(&cmdStepper_);
     ss.addCommand(&cmdServo_);
     ss.addCommand(&cmdPos_);
     ss.addCommand(&cmdPump_);
-    ss.addCommand(&cmdStepperRaw_);
     ss.addCommand(&cmdStepperAttach_);
+    ss.addCommand(&cmdServoAttach_);
     ss.addCommand(&cmdOK_);
 
     Serial.println("begin");
