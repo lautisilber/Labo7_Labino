@@ -23,8 +23,7 @@ typecode_t = Union[
     Literal['d']
 ]
 
-
-def __generic_binary_op(a: array, b: Union[array, int, float], op) -> array:
+def _generic_binary_op(a: array, b: Union[array, int, float], op) -> array:
     t = float if a.typecode in ('f', 'd') else int
     if isinstance(b, (float, int)):
         return array(a.typecode, (t(op(e,b)) for e in a))
@@ -34,7 +33,7 @@ def __generic_binary_op(a: array, b: Union[array, int, float], op) -> array:
         return array(a.typecode, (t(op(e1, e2)) for e1, e2 in zip(a, b)))
     raise TypeError()
 
-def __generic_binary_op_rightsided(b: Union[array, int, float], a: array, op) -> array:
+def _generic_binary_op_rightsided(b: Union[array, int, float], a: array, op) -> array:
     t = float if a.typecode in ('f', 'd') else int
     if isinstance(b, (float, int)):
         return array(a.typecode, (t(op(b,e)) for e in a))
@@ -59,11 +58,11 @@ def __generic_binary_op_rightsided(b: Union[array, int, float], a: array, op) ->
 #             return array(b.typecode, (op(a, e) for e in b))
 #     raise TypeError()
 
-def __generic_unary_op(a: array, op, t: Optional[typecode_t]=None) -> array:
+def _generic_unary_op(a: array, op, t: Optional[typecode_t]=None) -> array:
     t = a.typecode if t is None else t
     return array(t, (op(e) for e in a))
 
-def __generic_binary_logic_op(a: array, b: Union[array, int, float], op) -> array:
+def _generic_binary_logic_op(a: array, b: Union[array, int, float], op) -> array:
     if isinstance(b, (float, int)):
         return array('B', (op(e,b) for e in a))
     elif isinstance(b, array):
@@ -72,7 +71,7 @@ def __generic_binary_logic_op(a: array, b: Union[array, int, float], op) -> arra
         return array('B', (op(e1, e2) for e1, e2 in zip(a, b)))
     raise TypeError()
 
-def __generic_binary_logic_op_rightsided(b: Union[array, int, float], a: array, op) -> array:
+def _generic_binary_logic_op_rightsided(b: Union[array, int, float], a: array, op) -> array:
     if isinstance(b, (float, int)):
         return array('B', (op(b,e) for e in a))
     elif isinstance(b, array):
@@ -90,7 +89,7 @@ def zeros(size: int, t: Optional[typecode_t]=None) -> SmartArray:
     return filled(size, 0, t)
 
 def sqrt(a: SmartArray) -> SmartArray:
-    return __generic_unary_op(a, math.sqrt)
+    return SmartArray(_generic_unary_op(a, math.sqrt))
 
 class SmartArray:
     def __init__(self, a: Optional[Iterable]=None, t: Optional[typecode_t]=None) -> None:
@@ -126,17 +125,17 @@ class SmartArray:
     
     def bool(self, t: Optional[typecode_t]=None) -> SmartArray:
         t = 'B' if t is None else t
-        return SmartArray(__generic_unary_op(self.arr, bool, t))
+        return SmartArray(_generic_unary_op(self.arr, bool, t))
     
     def int(self, t: Optional[typecode_t]=None) -> SmartArray:
         if t is None:
             t = 'q' if self.typecode not in ('b', 'B', 'u', 'h', 'H', 'i', 'I', 'l', 'L', 'q', 'Q') else self.typecode
-        return SmartArray(__generic_unary_op(self.arr, int, t))
+        return SmartArray(_generic_unary_op(self.arr, int, t))
     
     def float(self, t: Optional[typecode_t]=None) -> SmartArray:
         if t is None:
             t = 'd' if self.typecode not in ('f', 'd') else self.typecode
-        return SmartArray(__generic_unary_op(self.arr, float, t))
+        return SmartArray(_generic_unary_op(self.arr, float, t))
     
     def append(self, x: Union[int, float]) -> None:
         self.arr.append(x)
@@ -150,136 +149,136 @@ class SmartArray:
     # math ops
 
     def __add__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.add))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.add))
     
     def __sub__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.sub))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.sub))
     
     def __mul__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.mul))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.mul))
     
     def __truediv__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.truediv))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.truediv))
     
     def __floordiv__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.floordiv))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.floordiv))
     
     def __pow__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.pow))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.pow))
     
     def __mod__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.mod))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.mod))
     
     def __radd__(self, other: Union[SmartArray, float, int]) -> SmartArray:
         return self.__add__(other)
     
     def __rsub__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.sub))
+        return SmartArray(_generic_binary_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.sub))
 
     def __rmul__(self, other: Union[SmartArray, float, int]) -> SmartArray:
         return self.__mul__(other)
     
     def __rtruediv__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.truediv))
+        return SmartArray(_generic_binary_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.truediv))
     
     def __rfloordiv__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.floordiv))
+        return SmartArray(_generic_binary_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.floordiv))
     
     def __rmod__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.mod))
+        return SmartArray(_generic_binary_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.mod))
     
     # unary ops
 
     def __abs__(self) -> SmartArray:
-        return SmartArray(__generic_unary_op(self.arr, abs))
+        return SmartArray(_generic_unary_op(self.arr, abs))
     
     def __pos__(self) -> SmartArray:
-        return SmartArray(__generic_unary_op(self.arr, operator.pos))
+        return SmartArray(_generic_unary_op(self.arr, operator.pos))
     
     def __neg__(self) -> SmartArray:
-        return SmartArray(__generic_unary_op(self.arr, operator.neg))
+        return SmartArray(_generic_unary_op(self.arr, operator.neg))
     
     def __invert__(self) -> SmartArray:
-        return SmartArray(__generic_unary_op(self.arr, operator.invert))
+        return SmartArray(_generic_unary_op(self.arr, operator.invert))
     
     def __ceil__(self) -> SmartArray:
-        return SmartArray(__generic_unary_op(self.arr, math.ceil))
+        return SmartArray(_generic_unary_op(self.arr, math.ceil))
 
     def __floor__(self) -> SmartArray:
-        return SmartArray(__generic_unary_op(self.arr, math.floor))
+        return SmartArray(_generic_unary_op(self.arr, math.floor))
 
     def __trunc__(self) -> SmartArray:
-        return SmartArray(__generic_unary_op(self.arr, math.trunc))
+        return SmartArray(_generic_unary_op(self.arr, math.trunc))
 
     # logic ops
 
     def __and__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.and_))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.and_))
     
     def __or__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.or_))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.or_))
     
     def __xor__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.xor))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.xor))
 
     def __lshift__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.lshift))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.lshift))
     
     def __rshift__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.rshift))
+        return SmartArray(_generic_binary_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.rshift))
 
     def __rand__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.and_))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.and_))
 
     def __ror__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.or_))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.or_))
     
     def __rxor__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.xor))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.xor))
 
     def __rlshift__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.lshift))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.lshift))
     
     def __rrshift__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.rshift))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.rshift))
 
     # bool ops
 
     def __eq__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.eq))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.eq))
     
     def __ne__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.ne))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.ne))
     
     def __lt__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.lt))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.lt))
     
     def __gt__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.gt))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.gt))
     
     def __le__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.le))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.le))
     
     def __ge__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.ge))
+        return SmartArray(_generic_binary_logic_op(self.arr, other if isinstance(other, (float, int)) else other.arr, operator.ge))
     
     def __req__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.eq))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.eq))
     
     def __rne__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.ne))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.ne))
     
     def __rlt__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.lt))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.lt))
     
     def __rgt__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.gt))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.gt))
     
     def __rle__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.le))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.le))
     
     def __rge__(self, other: Union[SmartArray, float, int]) -> SmartArray:
-        return SmartArray(__generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.ge))
+        return SmartArray(_generic_binary_logic_op_rightsided(other if isinstance(other, (float, int)) else other.arr, self.arr, operator.ge))
 
     # utils
 
@@ -294,3 +293,9 @@ class SmartArray:
     
     def __str__(self) -> str:
         return self.__repr__()
+
+if __name__ == '__main__':
+    a = SmartArray([1, 2, 3])
+    b = SmartArray([4, 5, 6])
+
+    print(a+b)
