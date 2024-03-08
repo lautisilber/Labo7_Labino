@@ -10,19 +10,25 @@ from typing import Tuple
 # from timer_helper import RepeatedTimer
 # from arduino_controller import arduino_reset
 
+# change working directory to here
+import os
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
+
 def tiempo_from_int(intensity: int) -> int:
-    return min(1400 + (min(max(intensity, 0), 10) * 180), 3200)
+    return min(1600 + (min(max(intensity, 0), 10) * 180), 2000)
 
 def pwm_from_intensity(intensity: int) -> int:
-    return int(min(67 + (0 if intensity < 10 else (intensity-10) * 3.3 if intensity <= 20 else 100), 100))
+    return int(min(57 + (0 if intensity < 10 else (intensity-10) * 3.3 if intensity <= 20 else 100), 100))
 
 def water(sm: SerialManager, index: int, intensity: int):
     sm.cmd_servo_attach(True)
+    sleep(1)
     if index == 0:
         sm.cmd_servo(25)
     elif index == 1:
         sm.cmd_servo(165)
-    sm.cmd_servo_attach(False)
 
     tiempo_ms = tiempo_from_int(intensity)
     pwm = pwm_from_intensity(intensity)
@@ -37,8 +43,8 @@ def tick(sm: SerialManager, balanzas: Balanzas, file_manager: FileManager, n_bal
     res = None
     while res is None:
         res = balanzas.read_stats()
-        sleep(5)
         if res is None:
+            sleep(5)
             lh.warning('Main: No se pudo leer las balanzas. Volviendo a intentar...')
     vals, n_filtered, n_unsuccessful = res
     if len(vals) != n_balanzas:
@@ -106,7 +112,7 @@ def main() -> None:
     fm = FileManager(n_balanzas)
     
     grams_goals = SmartArray((660, 613))
-    grams_threshold: float = 5.0
+    grams_threshold: float = 2.0
 
     if not n_balanzas == len(grams_goals):
         raise Exception(f'Main: grams_goals wrong length. correct is {n_balanzas}')
@@ -133,3 +139,4 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
+

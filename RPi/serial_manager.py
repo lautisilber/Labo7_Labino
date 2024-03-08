@@ -289,3 +289,4 @@ if __name__ == '__main__':
     sm.open()
     print(sm.cmd_ok())
     print(sm.cmd_hx())
+

@@ -72,10 +72,10 @@ class UncertaintiesArray:
         return UncertaintiesArray(self)
     
     def values(self) -> SmartArray:
-        return SmartArray((e.nominal_value for e in self), t=float)
+        return SmartArray(tuple(e.nominal_value for e in self), dtype=float)
     
     def errors(self) -> SmartArray:
-        return SmartArray((e.std_dev for e in self), t=float)
+        return SmartArray(tuple(e.std_dev for e in self), dtype=float)
     
     # math ops
 
@@ -198,10 +198,10 @@ class UncertaintiesList(UncertaintiesArray):
         return UncertaintiesList(self)
     
     def values(self) -> SmartList:
-        return SmartList((e.nominal_value for e in self), t=float)
+        return SmartList((e.nominal_value for e in self), dtype=float)
     
     def errors(self) -> SmartList:
-        return SmartList((e.std_dev for e in self), t=float)
+        return SmartList((e.std_dev for e in self), dtype=float)
 
     def append(self, x: ufloat_t) -> None:
         if not isinstance(x, ufloat_t):
@@ -226,3 +226,4 @@ class UncertaintiesList(UncertaintiesArray):
     
     def __repr__(self) -> str:
         return f'UncertaintiesList({list(self)})'
+

@@ -37,24 +37,24 @@ class Balanzas:
         with open(self.save_file, 'r') as f:
             try:
                 obj = json.load(f)
-                offsets = UncertaintiesArray(obj['offsets'])
-                slopes = UncertaintiesArray(obj['slopes'])
-                offsets_error = UncertaintiesArray(obj['offsets_error'])
-                slopes_error = UncertaintiesArray(obj['slopes_error'])
+                offsets = SmartArray(obj['offsets'])
+                slopes = SmartArray(obj['slopes'])
+                offsets_error = SmartArray(obj['offsets_error'])
+                slopes_error = SmartArray(obj['slopes_error'])
+
+                print(offsets, slopes, offsets_error, slopes_error)
 
                 if len(offsets) == len(slopes) == len(offsets_error) == len(slopes_error) == self.n_balanzas:
                     self.offsets = UncertaintiesArray(offsets, offsets_error)
                     self.slopes = UncertaintiesArray(slopes, slopes_error)
                     res = True
+                    lh.info('Balanzas: Se cargo la calibracion guardada')
                 else:
+                    lh.warning('Balanzas: No se pudo cargar calibracion')
                     res = False
-            except:
+            except Exception as err:
+                lh.warning(f'Balanzas: No se pudo cargar calibracion con error {err}')
                 res = False
-
-            if res:
-                lh.info('Balanzas: Se cargo la calibracion guardada')
-            else:
-                lh.warning('Balanzas: No se pudo cargar calibracion')
             return res
             
     def save(self) -> bool:
@@ -127,7 +127,7 @@ class Balanzas:
         return cleaned_means, cleaned_stdevs, filtered_vals, n_error
     
     def read_stats(self, n: Optional[int]=None, err_threshold: Optional[float]=None) -> Optional[Tuple[UncertaintiesArray, SmartArray, float]]: # [mean, stdev, n_stats_filtered_vals, n_unsuccessful_reads]
-        if any(a is None for a in (self.offsets, self.offsets_error, self.slopes, self.slopes_error)):
+        if any(a is None for a in (self.offsets, self.slopes)):
             raise Exception('Balanzas have not been calibrated')
         res = self.read_stats_raw(n, err_threshold)
         if res is None:
@@ -233,3 +233,14 @@ def calibrate(sm: SerialManager, balanzas: Balanzas, n_balanzas: int, n: int=100
     else:
         print('No se pudo guardar el resultado de la calibracion. El resultado es:')
         print('Offsets: ', balanzas.offsets, 'Offset errs: ', balanzas.offsets_error, 'Slopes', balanzas.slopes, 'Slope errs', balanzas.slopes_error)
+
+if __name__ == '__main__':
+    from time import sleep
+
+    sm = SerialManager()
+
+    n_balanzas = 2
+
+    balanzas = Balanzas(sm, n_balanzas, n_statistics=50, n_arduino=20, err_threshold=30)
+
+    balanzas.load()

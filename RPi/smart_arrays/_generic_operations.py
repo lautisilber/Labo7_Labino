@@ -4,11 +4,13 @@ from ._check_dependencies import uncertainties_exists
 if uncertainties_exists:
     from uncertainties.core import AffineScalarFunc as ufloat_t
     scalar_t = Union[bool, int, float, complex, ufloat_t]
+    scalar_type_list = (bool, int, float, complex, ufloat_t)
 else:
     scalar_t = Union[bool, int, float, complex]
+    scalar_type_list = (bool, int, float, complex)
 
 def _generic_binary_op(a: Iterable, b: Union[Iterable, scalar_t], op: Callable, force_type: Optional[type]=None) -> Tuple: # type: ignore
-    if isinstance(b, scalar_t):
+    if isinstance(b, scalar_type_list):
         return tuple(op(e,b) for e in a)
     elif isinstance(b, Iterable):
         if not len(a) == len(b):
@@ -20,7 +22,7 @@ def _generic_binary_op(a: Iterable, b: Union[Iterable, scalar_t], op: Callable, 
     raise TypeError()
 
 def _generic_binary_op_rightsided(b: Union[Iterable, scalar_t], a: Iterable, op: Callable, force_type: Optional[type]=None) -> Tuple: # type: ignore
-    if isinstance(b, scalar_t):
+    if isinstance(b, scalar_type_list):
         return tuple(op(b,e) for e in a)
     elif isinstance(b, Iterable):
         if not len(a) == len(b):
@@ -35,7 +37,7 @@ def _generic_unary_op(a: Iterable, op) -> Tuple: # type: ignore
     return tuple(op(e) for e in a)
 
 def _generic_binary_logic_op(a: Iterable, b: Union[Iterable, scalar_t], op: Callable, force_type: Optional[type]=None) -> Tuple: # type: ignore
-    if isinstance(b, scalar_t):
+    if isinstance(b, scalar_type_list):
         return tuple(op(e,b) for e in a)
     elif isinstance(b, Iterable):
         if not len(a) == len(b):
@@ -47,7 +49,7 @@ def _generic_binary_logic_op(a: Iterable, b: Union[Iterable, scalar_t], op: Call
     raise TypeError()
 
 def _generic_binary_logic_op_rightsided(b: Union[Iterable, scalar_t], a: Iterable, op: Callable, force_type: Optional[type]=None) -> Tuple: # type: ignore
-    if isinstance(b, scalar_t):
+    if isinstance(b, scalar_type_list):
         return tuple(op(b,e) for e in a)
     elif isinstance(b, Iterable):
         if not len(a) == len(b):

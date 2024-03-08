@@ -6,17 +6,18 @@ from . import _generic_operations as go
 from ._utils import castable, calculate_dominant_type, calculate_dominant_type_from_iter
 
 scalar_t = Union[bool, int, float, complex]
+scalar_type_list = (bool, int, float, complex)
 
 def _cdt(a: Union[SmartArray, SmartList, scalar_t], b: Union[SmartArray, SmartList, scalar_t]) -> type:
     if isinstance(a, (SmartArray, SmartList)):
         t1 = a.dtype
-    elif isinstance(a, scalar_t):
+    elif isinstance(a, scalar_type_list):
         t1 = type(a)
     else:
         raise TypeError()
     if isinstance(b, (SmartArray, SmartList)):
         t2 = b.dtype
-    elif isinstance(b, scalar_t):
+    elif isinstance(b, scalar_type_list):
         t2 = type(b)
     else:
         raise TypeError()
@@ -44,10 +45,10 @@ class SmartArray:
             if dtype is None:
                 self.t = calculate_dominant_type_from_iter(a)
             else:
-                if not issubclass(dtype, scalar_t):
+                if not any(dtype is t for t in scalar_type_list):
                     raise ValueError(f'dtype {dtype} is not allowed')
                 self.t = dtype
-            if not issubclass(self.t, scalar_t):
+            if not any(self.t is t for t in scalar_type_list):
                 raise TypeError('not all elements of the iterable are scalar')
             if not all(castable(e, self.t) for e in a):
                 raise TypeError('not all elements of the iterable are of same type')
@@ -76,16 +77,16 @@ class SmartArray:
         self.arr[key] = self.t(value)
 
     def bool(self) -> SmartArray:
-        return SmartArray((bool(e) for e in self), dtype=bool)
+        return SmartArray(tuple(bool(e) for e in self), dtype=bool)
     
     def int(self) -> SmartArray:
-        return SmartArray((int(e) for e in self), dtype=int)
+        return SmartArray(tuple(int(e) for e in self), dtype=int)
     
     def float(self) -> SmartArray:
-        return SmartArray((float(e) for e in self), dtype=float)
+        return SmartArray(tuple(float(e) for e in self), dtype=float)
     
     def complex(self) -> SmartArray:
-        return SmartArray((complex(e) for e in self), dtype=complex)
+        return SmartArray(tuple(complex(e) for e in self), dtype=complex)
 
     def reverse(self) -> None:
         self.arr.reverse()
@@ -99,43 +100,43 @@ class SmartArray:
     # math ops
 
     def __add__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op(self, other, operator.add, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op(self, other, operator.add, scalar_type_list), dtype=_cdt(self, other))
     
     def __sub__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op(self, other, operator.sub, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op(self, other, operator.sub, scalar_type_list), dtype=_cdt(self, other))
     
     def __mul__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op(self, other, operator.mul, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op(self, other, operator.mul, scalar_type_list), dtype=_cdt(self, other))
     
     def __truediv__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op(self, other, operator.truediv, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op(self, other, operator.truediv, scalar_type_list), dtype=_cdt(self, other))
     
     def __floordiv__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op(self, other, operator.floordiv, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op(self, other, operator.floordiv, scalar_type_list), dtype=_cdt(self, other))
     
     def __pow__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op(self, other, operator.pow, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op(self, other, operator.pow, scalar_type_list), dtype=_cdt(self, other))
     
     def __mod__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op(self, other, operator.mod, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op(self, other, operator.mod, scalar_type_list), dtype=_cdt(self, other))
     
     def __radd__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
         return self.__add__(other)
     
     def __rsub__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op_rightsided(other, self, operator.sub, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op_rightsided(other, self, operator.sub, scalar_type_list), dtype=_cdt(self, other))
 
     def __rmul__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
         return self.__mul__(other)
     
     def __rtruediv__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op_rightsided(other, self, operator.truediv, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op_rightsided(other, self, operator.truediv, scalar_type_list), dtype=_cdt(self, other))
     
     def __rfloordiv__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op_rightsided(other, self, operator.floordiv, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op_rightsided(other, self, operator.floordiv, scalar_type_list), dtype=_cdt(self, other))
     
     def __rmod__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_op_rightsided(other, self, operator.fmod, scalar_t), dtype=_cdt(self, other))
+        return SmartArray(go._generic_binary_op_rightsided(other, self, operator.fmod, scalar_type_list), dtype=_cdt(self, other))
     
     # unary ops
 
@@ -163,31 +164,31 @@ class SmartArray:
     # bool ops
 
     def __eq__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op(self, other, operator.eq, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op(self, other, operator.eq, scalar_type_list), dtype=bool)
     
     def __ne__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op(self, other, operator.ne, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op(self, other, operator.ne, scalar_type_list), dtype=bool)
     
     def __lt__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op(self, other, operator.lt, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op(self, other, operator.lt, scalar_type_list), dtype=bool)
     
     def __gt__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op(self, other, operator.gt, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op(self, other, operator.gt, scalar_type_list), dtype=bool)
     
     def __le__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op(self, other, operator.le, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op(self, other, operator.le, scalar_type_list), dtype=bool)
     
     def __ge__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op(self, other, operator.ge, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op(self, other, operator.ge, scalar_type_list), dtype=bool)
     
     def __req__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op_rightsided(other, self, operator.eq, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op_rightsided(other, self, operator.eq, scalar_type_list), dtype=bool)
     
     def __rne__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op_rightsided(other, self, operator.ne, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op_rightsided(other, self, operator.ne, scalar_type_list), dtype=bool)
     
     def __rlt__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
-        return SmartArray(go._generic_binary_logic_op_rightsided(other, self, operator.lt, scalar_t), dtype=bool)
+        return SmartArray(go._generic_binary_logic_op_rightsided(other, self, operator.lt, scalar_type_list), dtype=bool)
     
     def __rgt__(self, other: Union[SmartArray, SmartList, scalar_t]) -> SmartArray:
         return SmartArray(go._generic_binary_logic_op_rightsided(other, self, operator.gt), dtype=bool)
