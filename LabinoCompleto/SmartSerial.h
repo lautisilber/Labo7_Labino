@@ -3,7 +3,6 @@
 
 #include <Arduino.h>
 
-#define COMMAND_STR_MAX_LEN 16
 #define MAX_COMMANDS 64
 #define MAX_ARGUMENTS 16 // lim of args is actually MAX_ARGUMENTS-1 since the first argument is actually the command
 #define STREAM_BUFFER_LEN 64
@@ -74,18 +73,53 @@ static void __defaultCommandNotRecognizedCB(Stream *stream, const char *cmd)
     stream->println(F("\""));
 }
 
-class SmartCommand
+class SmartCommandBase
 {
+protected:
+    const char *com;
 public:
-    char com[COMMAND_STR_MAX_LEN] = {0};
     smartCommandCB_t cb;
 
-    SmartCommand(const char *command, smartCommandCB_t callback)
-        : cb(callback)
-    {
-        memcpy(com, command, min(COMMAND_STR_MAX_LEN, strlen(command)));
-    }
+    virtual bool compare(const char *str) const = 0;
 };
+
+class SmartCommandP : public SmartCommandBase
+{
+public:
+    SmartCommandP(const char *command, smartCommandCB_t callback)
+    {
+        cb = callback;
+        com = command;
+    }
+
+    bool compare(const char *str) const { return strcmp(str, com) == 0; }
+};
+// created to match the CreateSmartCommandF macro
+#define CreateSmartCommandP(class_name, command, callback) \
+    const char __##class_name##_pgm_cmd[] = command; \
+    SmartCommandP class_name(__##class_name##_pgm_cmd, callback);
+
+class SmartCommandF : public SmartCommandBase
+{
+public:
+    SmartCommandF(const __FlashStringHelper *command, smartCommandCB_t callback)
+    {
+        cb = callback;
+        com = reinterpret_cast<PGM_P>(command);
+    }
+    SmartCommandF(const char *command, smartCommandCB_t callback)
+    {
+        cb = callback;
+        com = command;
+    }
+
+    bool compare(const char *str) const { return strcmp_P(str, com) == 0; }
+};
+// this macro can be used to create a SmartCommandF without the need to create the const PROGMEM char[] variable manually
+// this will work as if SmartCommandF class_name(F(command), callback) were possible
+#define CreateSmartCommandF(class_name, command, callback) \
+    const PROGMEM char __##class_name##_pstr_cmd[] = command; \
+    SmartCommandF class_name(__##class_name##_pstr_cmd, callback);
 
 static char *__trimChar(char *str, char c)
 {
@@ -147,7 +181,7 @@ class SmartSerial
 private:
     Stream *_stream = NULL;
     size_t _nCommands = 0;
-    SmartCommand *_coms[MAX_COMMANDS] = {0};
+    SmartCommandBase *_coms[MAX_COMMANDS] = {0};
     char _buffer[STREAM_BUFFER_LEN+1] = {'\0'};
     size_t _bufferPos = 0;
     char _endChar;
@@ -159,7 +193,7 @@ public:
         : _stream(stream), _endChar(endChar), _sepChar(sepChar), _defaultCB(__defaultCommandNotRecognizedCB)
     {}
 
-    bool addCommand(const SmartCommand *const command)
+    bool addCommand(const SmartCommandBase *const command)
     {
         if (_nCommands >= MAX_COMMANDS-1)
             return false;
@@ -228,10 +262,10 @@ public:
                     // }
 
                     // get the serial command selected
-                    SmartCommand *sc = NULL;
+                    SmartCommandBase *sc = NULL;
                     for (size_t i = 0; i < _nCommands; i++)
                     {
-                        if (strcmp(_coms[i]->com, command) == 0)
+                        if (_coms[i]->compare(command)) //(strcmp(_coms[i]->com, command) == 0)
                         {
                             sc = _coms[i];
                             break;

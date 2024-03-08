@@ -36,15 +36,6 @@
 //     return u8 << 8; // this is effectively mapping from (0, 255) -> (0, 65280)
 // }
 
-static const char error_n_posiciones[] PROGMEM = "ERROR: No se puede ir a la posicion %i ya que hay unicamente %i posiciones";
-
-typedef struct Position
-{
-    long step;
-    uint8_t angle;
-} Position;
-
-template <size_t N>
 class MovementManager
 {
 private:
@@ -54,22 +45,16 @@ private:
     ULN2003 _stepper;
     ServoManager _servo;
 
-    Position *_positions;
-    Position *_homePosition;
     long _stepperSpeed; // ms per revolution (fastest is approx 5 s = 5000 ms)
     uint16_t _servoSpeed; // delay in ms between each angle
 
     char _errorStr[MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE] = {0};
 
 public:
-    MovementManager(byte in1, byte in2, byte in3, byte in4, byte servo, const Position positions[N], const Position *homePosition, long stepperSpeed=5000, uint16_t servoSpeed=15)
+    MovementManager(byte in1, byte in2, byte in3, byte in4, byte servo, long stepperSpeed=5000, uint16_t servoSpeed=15)
         : _stepper(ULN2003(in1, in2, in3, in4, 2000)), _servo(servo, servoSpeed),
           _pinIN1(in1), _pinIN2(in2), _pinIN3(in3), _pinIN4(in4), _pinServo(servo), _stepperSpeed(stepperSpeed), _servoSpeed(servoSpeed)
     {
-        // set positions
-        _positions = positions;
-        _homePosition = homePosition;
-        
         // set stepper speed
         setStepperSpeed(stepperSpeed);
     }
@@ -93,23 +78,6 @@ public:
             stepperAttach(false);
         return true;
     }
-    bool stepperGoToPosition(Position *position, bool detach=false)
-    {
-        return stepperGoToStep(position->step, detach);
-    }
-    bool stepperGoToPosition(size_t positionIndex, bool detach=false)
-    {
-        if (positionIndex >= N)
-        {
-            SNPRINTF_PROGMEM(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, error_n_posiciones, positionIndex, N);
-            return false;
-        }
-
-        return stepperGoToPosition(&_positions[positionIndex], detach);
-    }
-    bool stepperGoHome(bool detach=true) {
-        return stepperGoToPosition(_homePosition, detach);
-    }
     void stepperAttach(bool attach) { _stepper.attach(attach); }
     inline long getStepperStep() const { return _stepper.getCurrentPosition(); }
     //////////////
@@ -129,67 +97,9 @@ public:
         }
         return true;
     }
-    bool servoGoToPosition(Position *position, bool detach=false)
-    {
-        const uint8_t angle = position->angle;
-        return servoGoToAngle(angle, detach);
-    }
-    bool servoGoToPosition(size_t positionIndex, bool detach=false)
-    {
-        if (positionIndex >= N)
-        {
-            SNPRINTF_PROGMEM(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, error_n_posiciones, positionIndex, N);
-            return false;
-        }
-        return servoGoToAngle(&_positions[positionIndex], detach);
-    }
-    bool servoGoHome(bool detach=true)
-    {
-        return servoGoToPosition(_homePosition, detach);
-    }
     void servoAttach(bool attach) { _servo.attach(attach); }
     inline uint8_t getServoAngle() const { return _servo.getAngle(); }
     /////////
-
-    /// position ///
-    bool goToPosition(size_t positionIndex, bool stepperFirst=true, bool detach=false)
-    {
-        if (positionIndex >= N)
-        {
-            SNPRINTF_PROGMEM(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, error_n_posiciones, positionIndex, N);
-            return false;
-        }
-
-        bool s1, s2;
-        if (stepperFirst)
-        {
-            s1 = stepperGoToPosition(positionIndex, detach);
-            s2 = servoGoToPosition(positionIndex, detach);
-        }
-        else
-        {
-            s2 = servoGoToPosition(positionIndex, detach);
-            s1 = stepperGoToPosition(positionIndex, detach);
-        }
-
-        return s1 && s2;
-    }
-    bool goHome(bool stepperFirst=false, bool detach=false)
-    {
-        bool s1, s2;
-        if (stepperFirst)
-        {
-            s1 = stepperGoToPosition(_homePosition, detach);
-            s2 = servoGoToPosition(_homePosition, detach);
-        }
-        else
-        {
-            s2 = servoGoToPosition(_homePosition, detach);
-            s1 = stepperGoToPosition(_homePosition, detach);
-        }
-        return s1 && s2;
-    }
-    ///////////////
 
     inline void printError(Stream *stream)
     {

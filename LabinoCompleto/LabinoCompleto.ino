@@ -18,10 +18,8 @@ const byte dhtPin = 4;
 const byte driverPins[4] = {8, 9, 10, 11}; // in1, in2, in3, in4
 const byte servoPin = 7;
 const byte pumpPin = 3;
-const Position pumpPos[] = {{1100, true}, {1100, false}, {2200, true}, {2200, false}};
 
 const size_t nBalanzas = ARR_LEN(dataPins);
-const size_t nPosiciones = ARR_LEN(pumpPos);
 
 #define DHT_TYPE DHT22
 DHT dht(dhtPin, DHT_TYPE);
@@ -30,16 +28,14 @@ SoftwareSerial ser(rxPin, txPin);
 
 MultipleHX711<nBalanzas> hx711(dataPins, sckPin);
 
-MovementManager<nPosiciones> movement(
+MovementManager movement(
     driverPins[0], driverPins[1], driverPins[2], driverPins[3], // stepper driver pins
     servoPin, // pin servo
-    pumpPos, // posiciones
-    1000, 5  // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
+    1000, 10  // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
 );
 
 PWMPin pump(pumpPin, percent2dutyCycleI(50));
 
-bool water(Stream *stream, size_t index, unsigned long tiempo, uint8_t intensidad, bool returnHome=true);
 void pumpForTime(unsigned long tiempo, uint8_t intensidad);
 
 #define LED_ON() digitalWrite(LED_BUILTIN, HIGH)
@@ -142,50 +138,6 @@ void cmdDHT(Stream *stream, CommandArguments *comArgs)
     stream->print(F(",\"temp\":"));
     stream->print(temp);
     stream->println(F("}"));
-    LED_OFF();
-}
-
-void cmdWater(Stream *stream, CommandArguments *comArgs)
-{
-    // cmd: water <int:index> <int:tiempo> <int:intensidad>
-    // respuesta: ok
-    // riega en la posicion <index>, la cantidad de milisegundos <tiempo>, con una intensidad de pwm <intensidad>
-
-    LED_ON();
-    if (comArgs->N != 3)
-    {
-        stream->println(F("ERROR: Los argumentos no se especificaron bien"));
-        LED_OFF();
-        return;
-    }
-
-    long int index, tiempo, intensidad;
-    bool isIntIndex = comArgs->toInt(0, &index);
-    bool isIntTiempo = comArgs->toInt(1, &tiempo); // en ms
-    bool isIntIntensidad = comArgs->toInt(2, &intensidad); // 0-100
-    if (!(isIntIndex && isIntTiempo && isIntIntensidad))
-    {
-        stream->print(F("ERROR: Alguno de los argumentos no es un numero entero. Los argumentos recibidos son, en orden, "));
-        stream->print(index);
-        stream->print(F(", "));
-        stream->print(tiempo);
-        stream->print(F(", "));
-        stream->println(intensidad);
-        LED_OFF();
-        return;
-    }
-
-    rcv(stream);
-
-    // regar con esas especificaciones
-    bool res = water(stream, index, tiempo, intensidad);
-
-    if (res)
-        stream->println(F("OK"));
-    // no hace falta porque la funcoin water() ya toma stream como parametro y le imprime errores
-    // else
-    //     stream->println(F("ERROR: Surgio un error regando"));
-
     LED_OFF();
 }
 
@@ -314,65 +266,6 @@ void cmdPump(Stream *stream, CommandArguments *comArgs)
     stream->println(F("OK"));
 }
 
-void cmdPos(Stream *stream, CommandArguments *comArgs)
-{
-    // cmd: pos <int:index || std:home>
-    // respuesta: OK
-    // posiciona el sistema en la posicion del indice indicado
-
-    LED_ON();
-    if (comArgs->N == 0)
-    {
-        stream->println(F("ERROR: No se proporcino un argumento numerico."));
-        LED_OFF();
-        return;
-    }
-
-    bool success;
-    if (strcmp(comArgs->arg(0), "home") == 0)
-    {
-        rcv(stream);
-        bool s1 = movement.servoGoHome();
-        bool s2 = movement.stepperGoHome();
-        success = s1 && s2;
-    }
-    else
-    {
-        // check if is a number
-        long int index;
-        bool isInt = comArgs->toInt(0, &index);
-
-        if (!isInt)
-        {
-            stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
-            stream->println(comArgs->arg(0));
-            LED_OFF();
-            return;
-        }
-
-        if (index < -1 || index >= nPosiciones)
-        {
-            stream->print(F("ERROR: El argumento deberia ser un indice entre 0 y "));
-            stream->print(nPosiciones-1);
-            stream->print(F(" o -1 (posicion home) pero es el numero "));
-            stream->println(index);
-            LED_OFF();
-            return;
-        }
-
-        rcv(stream);
-        bool s1 = movement.stepperGoToPosition(index);
-        bool s2 = movement.servoGoToPosition(index);
-        success = s1 && s2;
-    }
-
-    if (!success)
-        movement.printError(stream);
-    else
-        stream->println(F("OK"));
-    LED_OFF();
-}
-
 void cmdStepperAttach(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: stepper_attach <bool:attach>
@@ -452,17 +345,15 @@ void cmdOK(Stream *stream, CommandArguments *comArgs)
 
 SmartSerial ss(&ser);
 
-SmartCommand cmdBalanza_("hx", cmdBalanza);
-SmartCommand cmdNBalanzas_("hx_n", cmdNBalanzas);
-SmartCommand cmdDHT_("dht", cmdDHT);
-SmartCommand cmdWater_("water", cmdWater);
-SmartCommand cmdStepper_("stepper", cmdStepper);
-SmartCommand cmdServo_("servo", cmdServo);
-SmartCommand cmdPos_("pos", cmdPos);
-SmartCommand cmdPump_("pump", cmdPump);
-SmartCommand cmdStepperAttach_("stepper_attach", cmdStepperAttach);
-SmartCommand cmdServoAttach_("servo_attach", cmdServoAttach);
-SmartCommand cmdOK_("ok", cmdOK);
+CreateSmartCommandF(cmdBalanza_, "hx", cmdBalanza); // equivalent to: const PROGMEM char com_hx[] = "hx"; SmartCommandF cmdBalanza_(com_hx, cmdBalanza);
+CreateSmartCommandF(cmdNBalanzas_, "hx_n", cmdNBalanzas);
+CreateSmartCommandF(cmdDHT_, "dht", cmdDHT);
+CreateSmartCommandF(cmdStepper_, "stepper", cmdStepper);
+CreateSmartCommandF(cmdServo_, "servo", cmdServo);
+CreateSmartCommandF(cmdPump_, "pump", cmdPump);
+CreateSmartCommandF(cmdStepperAttach_, "stepper_attach", cmdStepperAttach);
+CreateSmartCommandF(cmdServoAttach_, "servo_attach", cmdServoAttach);
+CreateSmartCommandF(cmdOK_, "ok", cmdOK);
 
 void setup()
 {
@@ -480,10 +371,8 @@ void setup()
     ss.addCommand(&cmdBalanza_);
     ss.addCommand(&cmdNBalanzas_);
     ss.addCommand(&cmdDHT_);
-    ss.addCommand(&cmdWater_);
     ss.addCommand(&cmdStepper_);
     ss.addCommand(&cmdServo_);
-    ss.addCommand(&cmdPos_);
     ss.addCommand(&cmdPump_);
     ss.addCommand(&cmdStepperAttach_);
     ss.addCommand(&cmdServoAttach_);
@@ -506,53 +395,4 @@ void pumpForTime(unsigned long tiempo, uint8_t intensidad)
     delay(tiempo);
 
     pump.state(false);
-}
-
-bool water(Stream *stream, size_t index, unsigned long tiempo, uint8_t intensidad, bool returnHome=true)
-{
-    if (index >= nPosiciones)
-    {
-        stream->print(F("ERROR: El indice de maceta recibido es "));
-        stream->print(index);
-        stream->print(F(". Debe ser mayor o igual a 0 y menor que "));
-        stream->print(nBalanzas);
-        return false;
-    }
-    else if (tiempo <= 0)
-    {
-        stream->print(F("ERROR: El tiempo recibido es "));
-        stream->print(tiempo);
-        stream->println(F(". Debe ser mayor a 0"));
-        return false;
-    }
-    else if (intensidad <= 0 || intensidad > 100)
-    {
-        stream->print(F("ERROR: La intensidad PWM recibida es "));
-        stream->print(intensidad);
-        stream->println(F(". Debe ser mayor a 0 y menor o igual a 100"));
-        return false;
-    }
-
-    bool success = movement.goToPosition(index, true, false);
-
-    if (!success)
-    {
-        movement.printError(stream);
-        return false;
-    }
-
-    pumpForTime(tiempo, intensidad);
-
-    if (returnHome)
-    {
-        success = movement.goHome(false, true);
-    }
-
-    if (!success)
-    {
-        movement.printError(stream);
-        return false;
-    }
-
-    return true;
 }
