@@ -14,6 +14,8 @@ chmod a+x $ARDUINO_DIR/arduino-cli
 export PATH="$PATH:$ARDUINO_DIR" # esto agrega arduino-cli al path para poder llamarlo con el comando arduino-cli
 ```
 
+Para poder ejecutar arrduino-cli facilmente en el shell, se agregó al path. Para que este cambio tome efecto, correr el comando ```source ~/.bashrc```
+
 Instalemos ahora el toolchain para ```arduino:avr```
 
 Si se utiliza un proxy, realizar los siguientes pasos, si no saltearlos
@@ -36,9 +38,6 @@ Ahora que ya tenemos configurado el proxy si fue necesario, instalemos el toolch
 arduino-cli core update-index
 arduino-cli core install arduino:avr # esto instala las toolchains para las tarjetas arduino avr
 ```
-
-
-Para poder ejecutar arrduino-cli facilmente en el shell, se agregó al path. Para que este cambio tome efecto, correr el comando ```source ~/.bashrc```
 
 ## Librerías
 
