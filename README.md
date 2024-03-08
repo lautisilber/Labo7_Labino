@@ -33,12 +33,15 @@ LIBRARY_ZIP_URL="https://github.com/terryjmyers/PWM/archive/refs/heads/master.zi
 LIBRARY_OUT_FILE="$HOME/pwm.zip"
 LIBRARY_NAME="PWM"
 
+if [ ! -d "$HOME/Arduino/libraries" ]; then
+    mkdir "$HOME/Arduino/libraries"
+fi
 if [ ! -d "$HOME/Arduino/libraries/$LIBRARY_NAME" ]; then
     mkdir "$HOME/Arduino/libraries/$LIBRARY_NAME"
 fi
-wget "$LIBRARY_ZIP_URL" -O "LIBRARY_OUT_FILE"
-unzip "LIBRARY_OUT_FILE" -d "$HOME/Arduino/libraries/$LIBRARY_NAME"
-rm "LIBRARY_OUT_FILE"
+wget "$LIBRARY_ZIP_URL" -O "$LIBRARY_OUT_FILE"
+unzip "$LIBRARY_OUT_FILE" -d "$HOME/Arduino/libraries/$LIBRARY_NAME"
+rm "$LIBRARY_OUT_FILE"
 
 # esto hay que hacerlo por como esta armado el archivo zip
 mv $HOME/Arduino/libraries/$LIBRARY_NAME/"$LIBRARY_NAME"-master/* $HOME/Arduino/libraries/"$LIBRARY_NAME"
