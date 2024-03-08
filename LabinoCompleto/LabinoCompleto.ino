@@ -1,6 +1,7 @@
 // https://github.com/adafruit/DHT-sensor-library
 #include <DHT.h>
 
+#include <SoftwareSerial.h>
 #include "SmartSerial.h"
 #include "Balanzas.h"
 #include "MovementManager.h"
@@ -10,8 +11,9 @@
 #define ARR_LEN(a) sizeof(a)/sizeof(a[0])
 
 // pins
+const byte rxPin = 5, txPin = 6;
 const byte sckPin = 2;
-const byte dataPins[] = {5, 6};
+const byte dataPins[] = {A0, A1};
 const byte dhtPin = 4;
 const byte driverPins[4] = {8, 9, 10, 11}; // in1, in2, in3, in4
 const byte servoPin = 7;
@@ -23,6 +25,8 @@ const size_t nPosiciones = ARR_LEN(pumpPos);
 
 #define DHT_TYPE DHT22
 DHT dht(dhtPin, DHT_TYPE);
+
+SoftwareSerial ser(rxPin, txPin);
 
 MultipleHX711<nBalanzas> hx711(dataPins, sckPin);
 
@@ -446,7 +450,7 @@ void cmdOK(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
-SmartSerial ss(&Serial);
+SmartSerial ss(&ser);
 
 SmartCommand cmdBalanza_("hx", cmdBalanza);
 SmartCommand cmdNBalanzas_("hx_n", cmdNBalanzas);
@@ -463,6 +467,7 @@ SmartCommand cmdOK_("ok", cmdOK);
 void setup()
 {
     Serial.begin(9600);
+    ser.begin(9600);
     pinMode(LED_BUILTIN, OUTPUT);
     LED_ON();
 
