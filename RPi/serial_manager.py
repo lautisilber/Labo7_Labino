@@ -67,13 +67,18 @@ class SerialManagerGeneric:
         self.serial.parity = serial.PARITY_NONE
         self.serial.stopbits = serial.STOPBITS_ONE # probably
 
-    def close(self) -> None:
+    def close(self, log: bool=True) -> None:
         if self.is_open():
-            lh.info('SM: Closing serial port')
+            if log:
+                lh.info('SM: Closing serial port')
             self.serial.close()
 
     def __del__(self) -> None:
-        self.close()
+        # we can't log in this instance because of an issue with the
+        # logging library. A method (open) is garbage collected before
+        # the logging and it creates an exception
+        # https://stackoverflow.com/questions/64679139/nameerror-name-open-is-not-defined-when-trying-to-log-to-files
+        self.close(False)
 
     def is_open(self) -> bool:
         return self.serial.is_open
@@ -205,24 +210,6 @@ class SerialManager(SerialManagerGeneric):
             lh.debug(f'Arduino: Succeeded dht command with {res}')
         return res
     
-    def cmd_water(self, index: int, tiempo: int, intensidad: int) -> bool:
-        '''
-            index es el indice de la posicion pregrabada en el arduino
-            tiempo es el tiempo en ms que se prende la bomba
-            intensidad es la intensidad del pwm de 0% a 100% de la bomba
-        '''
-        if not all(isinstance(v, int) for v in (index, tiempo, intensidad)):
-            raise TypeError()
-        if tiempo < 0 or (intensidad < 0 or intensidad > 100):
-            raise ValueError()
-        res = self._send_command_wait_response_retries(f'water {index} {tiempo} {intensidad}')
-        res = res == 'OK'
-        if res is None:
-            lh.warning('Arduino: Failed water command')
-        else:
-            lh.debug(f'Arduino: Succeeded water command')
-        return res
-    
     def cmd_stepper(self, posicion: Optional[int]=None) -> Optional[int]:
         '''
             si posicion es un numero, es el indice de la posicion a la que se  el stepper.
@@ -257,20 +244,6 @@ class SerialManager(SerialManagerGeneric):
             lh.warning('Arduino: Failed servo command')
         else:
             lh.debug(f'Arduino: Succeeded servo command with {res}')
-        return res
-    
-    def cmd_pos(self, pos: Union[int, Literal['home']]) -> bool:
-        '''
-            lleva el stepper y el servo a la posicion del indice indicado en pos
-        '''
-        if not (isinstance(pos, int) or pos == 'home'):
-            raise TypeError()
-        res = self._send_command_wait_response_retries(f'pos {pos}')
-        res = res == 'OK'
-        if res is None:
-            lh.warning('Arduino: Failed pos command')
-        else:
-            lh.debug(f'Arduino: Succeeded pos command')
         return res
     
     def cmd_pump(self, tiempo: int, intensidad: int) -> bool:

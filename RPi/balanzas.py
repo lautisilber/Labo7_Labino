@@ -1,9 +1,9 @@
 from serial_manager import SerialManager
 from typing import List, Optional, Tuple, Union
 from logging_helper import logger as lh
-from array import array
-#import array_operations as ao
-import smart_array as sa
+from smart_arrays import UncertaintiesArray, SmartArray
+from smart_arrays import uncertainties_array as ua
+from smart_arrays import smart_array as sa
 from statistics import mean, stdev
 import json
 import os
@@ -24,10 +24,8 @@ class Balanzas:
         self.save_file = save_file
 
         # calibration
-        self.offsets: Optional[sa.SmartArray] = None
-        self.slopes: Optional[sa.SmartArray] = None
-        self.offsets_error: Optional[sa.SmartArray] = None
-        self.slopes_error: Optional[sa.SmartArray] = None
+        self.offsets: Optional[UncertaintiesArray] = None
+        self.slopes: Optional[UncertaintiesArray] = None
 
         self.load()
 
@@ -39,17 +37,14 @@ class Balanzas:
         with open(self.save_file, 'r') as f:
             try:
                 obj = json.load(f)
-                offsets = sa.SmartArray(obj['offsets'])
-                slopes = sa.SmartArray(obj['slopes'])
-                offsets_error = sa.SmartArray(obj['offsets_error'])
-                slopes_error = sa.SmartArray(obj['slopes_error'])
+                offsets = UncertaintiesArray(obj['offsets'])
+                slopes = UncertaintiesArray(obj['slopes'])
+                offsets_error = UncertaintiesArray(obj['offsets_error'])
+                slopes_error = UncertaintiesArray(obj['slopes_error'])
 
                 if len(offsets) == len(slopes) == len(offsets_error) == len(slopes_error) == self.n_balanzas:
-                    self.offsets = offsets
-                    self.slopes = slopes
-                    self.offsets_error = offsets_error
-                    self.slopes_error = slopes_error
-                    lh
+                    self.offsets = UncertaintiesArray(offsets, offsets_error)
+                    self.slopes = UncertaintiesArray(slopes, slopes_error)
                     res = True
                 else:
                     res = False
@@ -67,10 +62,10 @@ class Balanzas:
             lh.warning('Balanzas: No se pudo guardad calibracion porque se calibro aun')
             return False
         obj = {
-            'offsets': self.offsets.tolist(),
-            'slopes': self.slopes.tolist(),
-            'offsets_error': self.offsets_error.tolist(),
-            'slopes_error': self.slopes_error.tolist()
+            'offsets': list(self.offsets.values()),
+            'slopes': list(self.slopes.values),
+            'offsets_error': list(self.offsets.errors()),
+            'slopes_error': list(self.slopes.errors())
         }
         try:
             with open(self.save_file, 'w') as f:
@@ -83,7 +78,7 @@ class Balanzas:
             lh.warning(f'Balanzas: No se pudo guardar calibracion ({err})')
             return False
     
-    def read_single_raw(self) -> Optional[array]:
+    def read_single_raw(self) -> Optional[SmartArray]:
         res = self.sm.cmd_hx(self.n_arduino)
         if res is None:
             lh.warning(f'Balanzas: No se pudo leer de las balanzas')
@@ -93,9 +88,9 @@ class Balanzas:
             return None
         if not all(isinstance(r, float) for r in res):
             lh.error(f'Balanzas: El tipo de dato de las balanzas no es el correcto ({res})')
-        return array('d', res)
+        return SmartArray(res)
     
-    def read_stats_raw(self, n: Optional[int]=None, err_threshold: Optional[float]=None) -> Optional[Tuple[array, array, array, float]]: # [mean, stdev, n_stats_filtered_vals, n_unsuccessful_reads]
+    def read_stats_raw(self, n: Optional[int]=None, err_threshold: Optional[float]=None) -> Optional[Tuple[SmartArray, SmartArray, SmartArray, float]]: # [mean, stdev, n_stats_filtered_vals, n_unsuccessful_reads]
         n = self.n_statistics if n is None else n
         err_threshold = self.err_threshold if err_threshold is None else err_threshold
         # si err_threshold <= 0, no se considera, y se toman todos los valores
@@ -123,15 +118,15 @@ class Balanzas:
             lh.error(f'Balanzas: cleaned_vals de forma [self.n_balanzas, ?] tiene una sublista de largo nulo')
             return None
 
-        cleaned_means = sa.SmartArray([mean(cv) for cv in cleaned_vals]) # [self.n_balanzas]
-        cleaned_stdevs = sa.SmartArray([stdev(cv) for cv in cleaned_vals]) # [self.n_balanzas]
-        filtered_vals = sa.SmartArray([n_completed-len(cv) for cv in cleaned_vals])  # [self.n_balanzas]
+        cleaned_means = SmartArray([mean(cv) for cv in cleaned_vals]) # [self.n_balanzas]
+        cleaned_stdevs = SmartArray([stdev(cv) for cv in cleaned_vals]) # [self.n_balanzas]
+        filtered_vals = SmartArray([n_completed-len(cv) for cv in cleaned_vals])  # [self.n_balanzas]
 
         lh.debug(f'Balanza: Se leyo las balanzas y hubo {n_error} veces que no se pudo leer del Arduino y {filtered_vals} valores que se descartaron por estadistica')
 
         return cleaned_means, cleaned_stdevs, filtered_vals, n_error
     
-    def read_stats(self, n: Optional[int]=None, err_threshold: Optional[float]=None) -> Optional[Tuple[array, array, array, float]]: # [mean, stdev, n_stats_filtered_vals, n_unsuccessful_reads]
+    def read_stats(self, n: Optional[int]=None, err_threshold: Optional[float]=None) -> Optional[Tuple[UncertaintiesArray, SmartArray, float]]: # [mean, stdev, n_stats_filtered_vals, n_unsuccessful_reads]
         if any(a is None for a in (self.offsets, self.offsets_error, self.slopes, self.slopes_error)):
             raise Exception('Balanzas have not been calibrated')
         res = self.read_stats_raw(n, err_threshold)
@@ -139,14 +134,17 @@ class Balanzas:
             return None
         means, stdevs, filtered_vals, unsuccessful_reads = res
 
-        means_no_slope = means - self.offsets
-        stdevs_no_slope = sa.sqrt( stdevs**2 + self.offsets_error**2 )
+        values_raw = UncertaintiesArray(means, stdevs)
+        values = (values_raw - self.offsets) / self.slopes
 
-        means_real = means_no_slope / self.slopes
-        stdevs_real = abs(means_real) * sa.sqrt( (stdevs_no_slope/means_no_slope)**2 + (self.slopes_error/self.slopes)**2 )
+        # means_no_slope = means - self.offsets
+        # stdevs_no_slope = sa.sqrt( stdevs**2 + self.offsets_error**2 )
 
-        lh.debug(f'Balanza: read_stats -> {means_real}, {stdevs_real}, {filtered_vals}, {unsuccessful_reads}')
-        return means_real, stdevs_real, filtered_vals, unsuccessful_reads
+        # means_real = means_no_slope / self.slopes
+        # stdevs_real = abs(means_real) * sa.sqrt( (stdevs_no_slope/means_no_slope)**2 + (self.slopes_error/self.slopes)**2 )
+
+        lh.debug(f'Balanza: read_stats -> {values.values()}, {values.errors()}, {filtered_vals}, {unsuccessful_reads}')
+        return values, filtered_vals, unsuccessful_reads
     
     def calibrate_offset(self, n: Optional[int]=None, err_threshold: Optional[float]=None, err_lim: float=1) -> bool:
         n = self.n_statistics*2 if n is None else n
@@ -157,16 +155,16 @@ class Balanzas:
             lh.error(f'Balanzas: No se pudo calibrar offset porque read_stats_raw() devolvio None')
             return False
 
-        val, err, _, _ = res
+        mean, err, _, _ = res
         if any(e > err_lim for e in err):
             lh.error(f'Balanzas: Couldn\'t calibrate offset since there were errors greater than the limit {err_lim}. The errors are {err}')
             return False
 
+        val = UncertaintiesArray(mean, err)
         self.offsets = val
-        self.offsets_error = err
         return True
     
-    def calibrate_slope(self, weights: Union[Tuple[float, ...], List[float], sa.SmartArray], weight_errs: Union[Tuple[float, ...], List[float], array], n: Optional[int]=None, err_threshold: Optional[float]=None, err_lim: float=1) -> bool:
+    def calibrate_slope(self, weights: UncertaintiesArray, n: Optional[int]=None, err_threshold: Optional[float]=None, err_lim: float=1) -> bool:
         n = self.n_statistics*2 if n is None else n
         err_threshold = self.err_threshold if err_threshold is None else err_threshold
 
@@ -177,28 +175,30 @@ class Balanzas:
             lh.error(f'Balanzas: Couldn\'t calibrate slope since the provided weight list is not of size {self.n_balanzas}. The provided weight list is {weights}')
             return False
         
-        if not isinstance(weights, sa.SmartArray):
-            weights = sa.SmartArray(weights)
+        if not isinstance(weights, UncertaintiesArray):
+            raise TypeError('weights no es una instancia de UncertaintiesArray')
 
         res = self.read_stats_raw(n, err_threshold)
         if res is None:
             lh.error(f'Balanzas: No se pudo calibrar slope porque read_stats_raw() devolvio None')
 
-        val, err, _, _ = res
+        mean, err, _, _ = res
+        val = UncertaintiesArray(mean, err)
 
         # https://en.wikipedia.org/wiki/Propagation_of_uncertainty
         # slope = dy/dx
-        dy = val - self.offsets
-        dy_err = sa.sqrt(err**2 + self.offsets_error**2)
-        slope = dy / weights
-        slope_err = abs(slope) * sa.sqrt( (dy_err/dy)**2 + (weight_errs/weights)**2 )
+        # dy = val - self.offsets
+        # dy_err = ua.sqrt(err**2 + self.offsets_error**2)
+        # slope = dy / weights
+        # slope_err = abs(slope) * ua.sqrt( (dy_err/dy)**2 + (weight_errs/weights)**2 )
 
-        if any(e > err_lim for e in slope_err):
-            lh.error(f'Balanzas: Couldn\'t calibrate slope since there were errors greater than the limit {err_lim}. The errors are {slope_err}')
+        slope = (val - self.offsets) / weights
+
+        if any(e > err_lim for e in slope.errors()):
+            lh.error(f'Balanzas: Couldn\'t calibrate slope since there were errors greater than the limit {err_lim}. The errors are {slope.errors()}')
             return False
 
         self.slopes = slope
-        self.slopes_error = slope_err
         return True
         
 def calibrate(sm: SerialManager, balanzas: Balanzas, n_balanzas: int, n: int=100):
@@ -215,9 +215,10 @@ def calibrate(sm: SerialManager, balanzas: Balanzas, n_balanzas: int, n: int=100
             res = res.replace('(', '').replace(')', '').replace(' ', '')
             weights_str, err_str = res.split('-')
             err_nr = float(err_str)
-            weights_errs = sa.filled(n_balanzas, err_nr)
+            weights_errs = [err_nr]*n_balanzas
             weights_str = weights_str.split(',')
-            weights = sa.SmartArray((float(e) for e in weights_str))
+            weights = [float(e) for e in weights_str]
+            weights = UncertaintiesArray(weights, weights_errs)
             if len(weights) == n_balanzas:
                 res_b = True
             else:
@@ -225,7 +226,7 @@ def calibrate(sm: SerialManager, balanzas: Balanzas, n_balanzas: int, n: int=100
         except:
             print('No se pudieron convertir los valores introducidos como numeros. Intenta de nuevo')
     print('Calibrando...')
-    balanzas.calibrate_slope(weights, weights_errs, n, err_threshold=1000, err_lim=1000)
+    balanzas.calibrate_slope(weights, n, err_threshold=1000, err_lim=1000)
     
     if balanzas.save():
         print('Listo!')
