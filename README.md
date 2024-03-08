@@ -11,10 +11,32 @@ if [ ! -d "$ARDUINO_DIR" ]; then
 fi
 curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$ARDUINO_DIR sh
 chmod a+x $ARDUINO_DIR/arduino-cli
-$ARDUINO_DIR/arduino-cli core update-index
-$ARDUINO_DIR/arduino-cli core install arduino:avr # esto instala las toolchains para las tarjetas arduino avr
 export PATH="$PATH:$ARDUINO_DIR" # esto agrega arduino-cli al path para poder llamarlo con el comando arduino-cli
 ```
+
+Instalemos ahora el toolchain para ```arduino:avr```
+
+Si se utiliza un proxy, realizar los siguientes pasos, si no saltearlos
+
+```bash
+arduino-cli config init
+vim ~/.arduino15/arduino-cli.yaml
+```
+
+y agregar al final del archivo
+
+```yaml
+network:
+    proxy: http://www.proxy.com
+```
+
+Ahora que ya tenemos configurado el proxy si fue necesario, instalemos el toolchain con los siguientes comandos
+
+```bash
+arduino-cli core update-index
+arduino-cli core install arduino:avr # esto instala las toolchains para las tarjetas arduino avr
+```
+
 
 Para poder ejecutar arrduino-cli facilmente en el shell, se agregó al path. Para que este cambio tome efecto, correr el comando ```source ~/.bashrc```
 
