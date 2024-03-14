@@ -68,11 +68,11 @@ public:
     inline void setStepperSpeed(long stepperSpeed) { _stepperSpeed = stepperSpeed; _stepper.setMsPerRevolution(stepperSpeed); }
     bool stepperGoToStep(long step, bool detach=false)
     {
-        if (step < 0)
-        {
-            SNPRINTF_FLASH(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, F("ERROR: No se puede ir a una posicion negativa. La posicion provista fue %i"), step);
-            return false;
-        }
+        // if (step < 0)
+        // {
+        //     SNPRINTF_FLASH(_errorStr, MOVEMENT_MANAGER_ERROR_LOG_STR_MAX_SIZE-1, F("ERROR: No se puede ir a una posicion negativa. La posicion provista fue %i"), step);
+        //     return false;
+        // }
         _stepper.goToPosition(step);
         if (detach)
             stepperAttach(false);
