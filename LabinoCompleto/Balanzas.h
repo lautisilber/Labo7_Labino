@@ -35,6 +35,8 @@ class MultipleHX711
         bool USE_PORT_C = false;
         bool USE_PORT_D = false;
 
+        bool _read_no_check(long values[N]);
+
     public:
 
         MultipleHX711(const byte dout[N], byte pd_sck, byte gain = 128);
@@ -51,12 +53,16 @@ class MultipleHX711
         // Check if MultipleHX711 is ready
         // from the datasheet: When output data is not ready for retrieval, digital output pin DOUT is high. Serial clock
         // input PD_SCK should be low. When DOUT goes to low, it indicates data is ready for retrieval.
-        bool isReady();
+        bool isReady(byte *failingPin = nullptr);
+        bool isReadySingle(size_t index);
 
         // Wait for the MultipleHX711 to become ready
-        void waitReady(unsigned long delay_ms = 5);
-        bool waitReadyRetry(int retries = 10, unsigned long delay_ms = 5);
-        bool waitReadyTimeout(unsigned long timeout = 5000, unsigned long delay_ms = 5);
+        void waitReady(unsigned long delay_ms = 5, byte *failingPin = nullptr);
+        bool waitReadyRetry(uint16_t retries = 10, unsigned long delay_ms = 5, byte *failingPin = nullptr);
+        bool waitReadyTimeout(unsigned long timeout = 5000, unsigned long delay_ms = 5, byte *failingPin = nullptr);
+        bool waitReadySingle(size_t index, unsigned long delay_ms = 5);
+        bool waitReadyRetrySingle(size_t index, uint16_t retries = 10, unsigned long delay_ms = 5);
+        bool waitReadyTimeoutSingle(size_t index, unsigned long timeout = 5000, unsigned long delay_ms = 5);
 
         // set the gain factor; takes effect only after a call to read()
         // channel A can be set for a 128 or 64 gain; channel B has a fixed 32 gain
@@ -66,6 +72,8 @@ class MultipleHX711
         // waits for the chip to be ready and returns a reading
         bool read(long values[N], unsigned long timeout=0);
         bool readAvg(float values[N], uint8_t n, unsigned long timeout=0);
+        bool readSingle(size_t index, long *value, unsigned long timeout=0);
+        bool readAvgSingle(size_t index, float *value, uint8_t n, unsigned long timeout=0);
 
         // puts the chip into power down mode
         void powerDown();
@@ -99,6 +107,7 @@ void readPort(bool states[N], const uint8_t dout[N], bool portB, bool portC, boo
         else if (port == PORT_D_NUMBER)
             states[i] = (bool)(valsD & mask);
     }
+
 }
 
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
@@ -135,7 +144,7 @@ void readPort(bool states[N], const uint8_t dout[N], bool portB, bool portC, boo
 // - https://community.hiveeyes.org/t/using-bogdans-canonical-hx711-library-on-the-esp32/539
 
 template<size_t N>
-void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, uint8_t bitOrder, bool portB, bool portC, bool portD) {
+static void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, uint8_t bitOrder, bool portB, bool portC, bool portD) {
     uint8_t i;
     bool states[2];
     memset(values, 0, N*sizeof(uint8_t));
@@ -162,7 +171,7 @@ void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, 
 }
 #else
 template<size_t N>
-void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, uint8_t bitOrder, bool portB, bool portC, bool portD) {
+static void shiftInSlow(uint8_t values[N], const uint8_t dataPin[N], uint8_t clockPin, uint8_t bitOrder, bool portB, bool portC, bool portD) {
     uint8_t i;
     bool states[N];
     memset(values, 0, N*sizeof(uint8_t));
@@ -225,11 +234,27 @@ void MultipleHX711<N>::begin() {
 }
 
 template<size_t N>
-bool MultipleHX711<N>::isReady() {
+bool MultipleHX711<N>::isReady(byte *failingPin) {
     // return digitalRead(DOUT) == LOW;
-    bool states[2];
+    // OJO!!!! Leer low es que esta ready!!!!
+    bool states[N]; // ANTES ESTABA bool states[2];!!! GRAVE ERROR
     readPort<N>(states, DOUT, USE_PORT_B, USE_PORT_C, USE_PORT_D);
-    return !states[0] && !states[1];
+    for (size_t i = 0; i < N; i++)
+        if (states[i])
+        {
+            if (failingPin != nullptr)
+                *failingPin = DOUT[i];
+            return false;
+        }
+    return true;
+}
+
+template<size_t N>
+bool MultipleHX711<N>::isReadySingle(size_t index) {
+    if (index >= N) return false;
+    bool states[N];
+    readPort<N>(states, DOUT, USE_PORT_B, USE_PORT_C, USE_PORT_D);
+    return !states[index];
 }
 
 template<size_t N>
@@ -249,17 +274,7 @@ void MultipleHX711<N>::setGain(byte gain) {
 }
 
 template<size_t N>
-bool MultipleHX711<N>::read(long values[N], unsigned long timeout=0) {
-
-    // Wait for the chip to become ready.
-    if (timeout == 0)
-        waitReady();
-    else
-    {
-        if (!waitReadyTimeout(timeout))
-            return false;
-    }
-
+bool MultipleHX711<N>::_read_no_check(long values[N]) {
     // Define structures for reading data into.
     unsigned long preValues[N] = {0};
     uint8_t data[3][N] = { 0 };
@@ -346,6 +361,45 @@ bool MultipleHX711<N>::read(long values[N], unsigned long timeout=0) {
 }
 
 template<size_t N>
+bool MultipleHX711<N>::read(long values[N], unsigned long timeout=0) {
+    // Wait for the chip to become ready.
+    if (timeout == 0)
+        waitReady();
+    else
+    {
+        if (!waitReadyTimeout(timeout))
+        {
+            return false;
+        }
+    }
+
+    return _read_no_check(values);
+}
+
+template<size_t N>
+bool MultipleHX711<N>::readSingle(size_t index, long *value, unsigned long timeout=0)
+{
+    if (index >= N) return false;
+
+    if (timeout == 0)
+        waitReadySingle(index);
+    else
+    {
+        if (!waitReadyTimeoutSingle(index, timeout))
+        {
+            return false;
+        }
+    }
+
+    long values[N];
+    bool success = read(values, timeout);
+
+    if (!success) return false;
+    *value = values[index];
+    return true;
+}
+
+template<size_t N>
 bool MultipleHX711<N>::readAvg(float values[N], uint8_t n, unsigned long timeout=0)
 {
     if (n == 0) return false;
@@ -381,18 +435,57 @@ bool MultipleHX711<N>::readAvg(float values[N], uint8_t n, unsigned long timeout
         #endif
     }
 
-    for (size_t i = 0; i < N; i++)
-        values[i] = sums[i] / nReads;
+    if (nReads == 0) return false;
 
-    return (bool)nReads;
+    for (size_t i = 0; i < N; i++)
+        values[i] = static_cast<float>(sums[i]) / static_cast<float>(nReads);
+
+    return true;
 }
 
 template<size_t N>
-void MultipleHX711<N>::waitReady(unsigned long delay_ms) {
+bool MultipleHX711<N>::readAvgSingle(size_t index, float *value, uint8_t n, unsigned long timeout=0)
+{
+    if (index >= N) return false;
+    if (n == 0) return false;
+
+    long raw;
+    bool success;
+
+    if (n == 1)
+    {
+        success = readSingle(index, &raw, timeout);
+        if (!success) return false;
+        *value = static_cast<float>(raw);
+        return true;
+    }
+
+    long sum = 0;
+    uint8_t nReads = 0;
+    for (uint8_t i = 0; i < n; i++)
+    {
+        success = readSingle(index, &raw, timeout);
+        if (!success) continue;
+
+        sum += raw;
+        ++nReads;
+
+        #ifdef ARCH_ESPRESSIF
+        delay(0);
+        #endif
+    }
+
+    if (nReads == 0) return false;
+    *value = static_cast<float>(sum) / static_cast<float>(nReads);
+    return true;
+}
+
+template<size_t N>
+void MultipleHX711<N>::waitReady(unsigned long delay_ms, byte *failingPin) {
     // Wait for the chip to become ready.
     // This is a blocking implementation and will
     // halt the sketch until a load cell is connected.
-    while (!isReady()) {
+    while (!isReady(failingPin)) {
         // Probably will do no harm on AVR but will feed the Watchdog Timer (WDT) on ESP.
         // https://github.com/bogde/MultipleHX711/issues/73
         delay(delay_ms);
@@ -400,13 +493,28 @@ void MultipleHX711<N>::waitReady(unsigned long delay_ms) {
 }
 
 template<size_t N>
-bool MultipleHX711<N>::waitReadyRetry(int retries, unsigned long delay_ms) {
+bool MultipleHX711<N>::waitReadySingle(size_t index, unsigned long delay_ms)
+{
+    // returns false if index is out of range
+    if (index >= N) return false;
+    // Wait for the chip to become ready.
+    // This is a blocking implementation and will
+    // halt the sketch until a load cell is connected.
+    while (!isReadySingle(index)) {
+        // Probably will do no harm on AVR but will feed the Watchdog Timer (WDT) on ESP.
+        // https://github.com/bogde/MultipleHX711/issues/73
+        delay(delay_ms);
+    }
+}
+
+template<size_t N>
+bool MultipleHX711<N>::waitReadyRetry(uint16_t retries, unsigned long delay_ms, byte *failingPin) {
     // Wait for the chip to become ready by
     // retrying for a specified amount of attempts.
     // https://github.com/bogde/MultipleHX711/issues/76
-    int count = 0;
+    uint16_t count = 0;
     while (count < retries) {
-        if (isReady()) {
+        if (isReady(failingPin)) {
             return true;
         }
         delay(delay_ms);
@@ -416,12 +524,46 @@ bool MultipleHX711<N>::waitReadyRetry(int retries, unsigned long delay_ms) {
 }
 
 template<size_t N>
-bool MultipleHX711<N>::waitReadyTimeout(unsigned long timeout, unsigned long delay_ms) {
+bool MultipleHX711<N>::waitReadyRetrySingle(size_t index, uint16_t retries, unsigned long delay_ms)
+{
+    if (index >= N) return false;
+    // Wait for the chip to become ready by
+    // retrying for a specified amount of attempts.
+    // https://github.com/bogde/MultipleHX711/issues/76
+    uint16_t count = 0;
+    while (count < retries) {
+        if (isReadySingle(index)) {
+            return true;
+        }
+        delay(delay_ms);
+        count++;
+    }
+    return false;
+}
+
+template<size_t N>
+bool MultipleHX711<N>::waitReadyTimeout(unsigned long timeout, unsigned long delay_ms, byte *failingPin) {
     // Wait for the chip to become ready until timeout.
     // https://github.com/bogde/MultipleHX711/pull/96
     unsigned long millisStarted = millis();
     while (millis() - millisStarted < timeout) {
-        if (isReady()) {
+        if (isReady(failingPin)) {
+            return true;
+        }
+        delay(delay_ms);
+    }
+    return false;
+}
+
+template<size_t N>
+bool MultipleHX711<N>::waitReadyTimeoutSingle(size_t index, unsigned long timeout = 5000, unsigned long delay_ms)
+{
+    if (index >= N) return false;
+    // Wait for the chip to become ready until timeout.
+    // https://github.com/bogde/MultipleHX711/pull/96
+    unsigned long millisStarted = millis();
+    while (millis() - millisStarted < timeout) {
+        if (isReadySingle(index)) {
             return true;
         }
         delay(delay_ms);
