@@ -48,9 +48,9 @@ typedef enum MovementType : uint8_t {
 class ULN2003
 {
 private:
-    int32_t _currPosition = 0; // how many steps have been taken and in which direction
+    long _currPosition = 0; // how many steps have been taken and in which direction
     MovementType _movementType;
-    uint32_t _usPerStep = MIN_US_PER_STEP;
+    unsigned long _usPerStep = MIN_US_PER_STEP;
     byte _in1, _in2, _in3, _in4;
     bool _attached = false;
 
@@ -131,7 +131,7 @@ private:
     }
 
 public:
-    ULN2003(byte in1, byte in2, byte in3, byte in4, uint32_t usPerStep, MovementType movementType=HALF)
+    ULN2003(byte in1, byte in2, byte in3, byte in4, unsigned long usPerStep, MovementType movementType=HALF)
         : _in1(in1), _in2(in2), _in3(in3), _in4(in4), _movementType(movementType)
     {
         pinMode(_in1, OUTPUT);
@@ -180,7 +180,7 @@ public:
         _attached = state;
     }
 
-    bool setUsPerStep(uint32_t usPerStep)
+    bool setUsPerStep(unsigned long usPerStep)
     {
         if (usPerStep < MIN_US_PER_STEP)
         {
@@ -196,8 +196,8 @@ public:
 
     bool setMsPerRevolution(uint16_t msPerRevolution)
     {
-        uint32_t stepsPerRevolution = (_movementType == HALF ? STEPS_PER_REVOLUTION_WITH_GEARING*2 : STEPS_PER_REVOLUTION_WITH_GEARING);
-        uint32_t usPerStep = ((uint32_t)msPerRevolution) * 1000 / stepsPerRevolution;
+        unsigned long stepsPerRevolution = (_movementType == HALF ? STEPS_PER_REVOLUTION_WITH_GEARING*2 : STEPS_PER_REVOLUTION_WITH_GEARING);
+        unsigned long usPerStep = ((unsigned long)msPerRevolution) * 1000 / stepsPerRevolution;
         return setUsPerStep(usPerStep);
     }
 
