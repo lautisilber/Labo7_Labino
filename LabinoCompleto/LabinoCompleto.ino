@@ -13,7 +13,7 @@
 // pins
 const byte rxPin = 5, txPin = 6;
 const byte sckPin = 2;
-const byte dataPins[] = {A0, A1};
+const byte dataPins[] = {A0, A1, A2, A3, A4, A5};
 const byte dhtPin = 4;
 const byte driverPins[4] = {8, 9, 10, 11}; // in1, in2, in3, in4
 const byte servoPin = 7;
@@ -53,9 +53,9 @@ void cmdUnrecognized(Stream *stream, const char* cmd)
     LED_OFF();
 }
 
-void cmdBalanza(Stream *stream, CommandArguments *comArgs)
+void cmdHX(Stream *stream, CommandArguments *comArgs)
 {
-    // cmd: hx <int:n>
+    // cmd: hx <?int:n>
     // respuesta: [12,34,56,78,...]
     // devuelve los datos de la balanza
 
@@ -65,30 +65,32 @@ void cmdBalanza(Stream *stream, CommandArguments *comArgs)
 
     uint8_t n;
     if (comArgs->N == 0)
+    {
         n = 1;
+    }
     else
     {
-        // check if it is a number
-        long int nArg;
-        bool isInt = comArgs->toInt(0, &nArg);
+        // check if arg 1 is a number
+        long arg;
+        bool isInt = comArgs->toInt(0, &arg);
 
         if (!isInt)
         {
-            stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
+            stream->print(F("ERROR: El argumento 1 no es un numero entero. El argumento es "));
             stream->println(comArgs->arg(0));
             LED_OFF();
             return;
         }
 
-        if (nArg < 1 || nArg > 255)
+        if (arg < 1 || arg > 255)
         {
-            stream->print(F("ERROR: El argumento debe ser un numero entre 1 y 255. El argumento es "));
-            stream->println(nArg);
+            stream->print(F("ERROR: El argumento 1 debe ser un numero entre 1 y 255. El argumento es "));
+            stream->println(arg);
             LED_OFF();
             return;
         }
 
-        n = static_cast<uint8_t>(nArg);
+        n = static_cast<uint8_t>(arg);
     }
     
     rcv(stream);
@@ -104,7 +106,7 @@ void cmdBalanza(Stream *stream, CommandArguments *comArgs)
     stream->print('[');
     for (size_t i = 0; i < nBalanzas; i++)
     {
-        stream->print(values[i]);
+        stream->print(values[i],4);
         if (i < nBalanzas-1)
             stream->print(',');
         else
@@ -113,7 +115,92 @@ void cmdBalanza(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
-void cmdNBalanzas(Stream *stream, CommandArguments *comArgs)
+void cmdHXSingle(Stream *stream, CommandArguments *comArgs)
+{
+    // cmd: hx_single <int:n> <int:n>
+    // respuesta: 56
+    // devuelve los datos de la balanza
+
+    // devuelve la balanza del indice unicamente
+
+    LED_ON();
+
+    if (comArgs->N < 2)
+    {
+        stream->println(F("ERROR: No se proporcinaron dos argumentos numericos."));
+        LED_OFF();
+        return;
+    }
+
+    // extract argument 1
+    uint8_t n;
+    {
+        // check if arg 1 is a number
+        long arg;
+        bool isInt = comArgs->toInt(0, &arg);
+
+        if (!isInt)
+        {
+            stream->print(F("ERROR: El argumento 1 no es un numero entero. El argumento es "));
+            stream->println(comArgs->arg(0));
+            LED_OFF();
+            return;
+        }
+
+        if (arg < 1 || arg > 255)
+        {
+            stream->print(F("ERROR: El argumento 1 debe ser un numero entre 1 y 255. El argumento es "));
+            stream->println(arg);
+            LED_OFF();
+            return;
+        }
+
+        n = static_cast<uint8_t>(arg);
+    }
+
+    // extract argument 2
+    size_t index;
+    {
+        long arg;
+        bool isInt = comArgs->toInt(1, &arg);
+
+        if (!isInt)
+        {
+            stream->print(F("ERROR: El argumento 2 no es un numero entero. El argumento es "));
+            stream->println(comArgs->arg(0));
+            LED_OFF();
+            return;
+        }
+
+        if (arg < 0 || arg > nBalanzas)
+        {
+            stream->print(F("ERROR: El argumento 2 debe ser un indice entre 0 y "));
+            stream->print(nBalanzas-1);
+            stream->print(F(". El argumento es "));
+            stream->println(arg);
+            LED_OFF();
+            return;
+        }
+
+        index = static_cast<size_t>(arg);
+    }
+    
+    rcv(stream);
+
+    float value;
+    bool s = hx711.readAvgSingle(index, &value, n);
+    if (!s)
+    {
+        stream->println(F("ERROR: No se pudo leer las balanzas"));
+        LED_OFF();
+        return;
+    }
+    stream->println(value,4);
+
+    LED_OFF();
+}
+
+void cmdNhx(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: hx_n
     // respuesta: la cantidad de balanzas
@@ -152,7 +239,7 @@ void cmdStepper(Stream *stream, CommandArguments *comArgs)
     if (comArgs->N > 0)
     {
         // check if is a number
-        long int step;
+        long step;
         bool isInt = comArgs->toInt(0, &step);
 
         if (!isInt)
@@ -189,7 +276,7 @@ void cmdServo(Stream *stream, CommandArguments *comArgs)
     if (comArgs->N > 0)
     {
         // check if is all numbers
-        long int angle;
+        long angle;
         bool isInt = comArgs->toInt(0, &angle);
         if (!isInt)
         {
@@ -198,7 +285,7 @@ void cmdServo(Stream *stream, CommandArguments *comArgs)
             LED_OFF();
             return;
         }
-        else if (angle <= SERVO_MIN_ANGLE || angle >= SERVO_MAX_ANGLE) // puse && en vez de || me quiero morir :(
+        else if (angle < SERVO_MIN_ANGLE || angle > SERVO_MAX_ANGLE) // puse && en vez de || me quiero morir :(
         {
             stream->print(F("ERROR: El argumento es un numero menor a "));
             stream->print(SERVO_MIN_ANGLE);
@@ -232,7 +319,7 @@ void cmdPump(Stream *stream, CommandArguments *comArgs)
     }
 
     // check if it is a number
-    long int tiempo;
+    long tiempo;
     bool isIntTiempo = comArgs->toInt(0, &tiempo);
     if (!isIntTiempo)
     {
@@ -242,7 +329,7 @@ void cmdPump(Stream *stream, CommandArguments *comArgs)
         return;
     }
 
-    long int intensidadArg;
+    long intensidadArg;
     bool isIntIntensidad = comArgs->toInt(1, &intensidadArg);
     if (!isIntIntensidad)
     {
@@ -344,9 +431,11 @@ void cmdOK(Stream *stream, CommandArguments *comArgs)
 }
 
 SmartSerial ss(&ser);
+// SmartSerial ss(&Serial);
 
-CreateSmartCommandF(cmdBalanza_, "hx", cmdBalanza); // equivalent to: const PROGMEM char com_hx[] = "hx"; SmartCommandF cmdBalanza_(com_hx, cmdBalanza);
-CreateSmartCommandF(cmdNBalanzas_, "hx_n", cmdNBalanzas);
+CreateSmartCommandF(cmdHX_, "hx", cmdHX); // equivalent to: const PROGMEM char com_hx[] = "hx"; SmartCommandF cmdHX_(com_hx, cmdHX);
+CreateSmartCommandF(cmdHXSingle_, "hx_single", cmdHXSingle);
+CreateSmartCommandF(cmdNhx_, "hx_n", cmdNhx);
 CreateSmartCommandF(cmdDHT_, "dht", cmdDHT);
 CreateSmartCommandF(cmdStepper_, "stepper", cmdStepper);
 CreateSmartCommandF(cmdServo_, "servo", cmdServo);
@@ -368,8 +457,9 @@ void setup()
     dht.begin();
 
     ss.setDefaultCallback(cmdUnrecognized);
-    ss.addCommand(&cmdBalanza_);
-    ss.addCommand(&cmdNBalanzas_);
+    ss.addCommand(&cmdHX_);
+    ss.addCommand(&cmdHXSingle_);
+    ss.addCommand(&cmdNhx_);
     ss.addCommand(&cmdDHT_);
     ss.addCommand(&cmdStepper_);
     ss.addCommand(&cmdServo_);
