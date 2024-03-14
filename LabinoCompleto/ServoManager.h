@@ -37,7 +37,8 @@ public:
     {
         if (state)
         {
-            _servo.attach(_pin, SERVO_MIN_ANGLE, SERVO_MAX_ANGLE);
+            // https://community.blynk.cc/t/servo-only-move-90-degrees/56738/16
+            _servo.attach(_pin, 500, 2500);
         }
         else
         {
