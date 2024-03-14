@@ -26,7 +26,7 @@ public:
         return _args[n];
     }
 
-    bool toInt(size_t n, long int *i)
+    bool toInt(size_t n, long *i)
     {
         const char *str = arg(n);
         if (str == NULL) return false;
