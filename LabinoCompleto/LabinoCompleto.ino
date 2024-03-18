@@ -1,15 +1,19 @@
 // https://github.com/adafruit/DHT-sensor-library
 #include <DHT.h>
 
-#include <SoftwareSerial.h>
 #include "SmartSerial.h"
 #include "Balanzas.h"
 #include "MovementManager.h"
 #include "PWMHelper.h"
 
 #define RCV_COMMAND "rcv"
-#define BAUD_RATE 4800
+#define BAUD_RATE 9600
+#define SOFT_SERIAL false
 #define ARR_LEN(a) sizeof(a)/sizeof(a[0])
+
+#if SOFT_SERIAL
+#include <SoftwareSerial.h>
+#endif
 
 // pins
 const byte rxPin = 5, txPin = 6;
@@ -25,7 +29,9 @@ const size_t nBalanzas = ARR_LEN(dataPins);
 #define DHT_TYPE DHT22
 DHT dht(dhtPin, DHT_TYPE);
 
+#if SOFT_SERIAL
 SoftwareSerial ser(rxPin, txPin);
+#endif
 
 MultipleHX711<nBalanzas> hx711(dataPins, sckPin);
 
@@ -442,8 +448,11 @@ void cmdOK(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
+#if SOFT_SERIAL
 SmartSerial ss(&ser);
-// SmartSerial ss(&Serial);
+#else
+SmartSerial ss(&Serial);
+#endif
 
 CreateSmartCommandF(cmdHX_, "hx", cmdHX); // equivalent to: const PROGMEM char com_hx[] = "hx"; SmartCommandF cmdHX_(com_hx, cmdHX);
 CreateSmartCommandF(cmdHXSingle_, "hx_single", cmdHXSingle);
@@ -454,13 +463,17 @@ CreateSmartCommandF(cmdServo_, "servo", cmdServo);
 CreateSmartCommandF(cmdPump_, "pump", cmdPump);
 CreateSmartCommandF(cmdStepperAttach_, "stepper_attach", cmdStepperAttach);
 CreateSmartCommandF(cmdServoAttach_, "servo_attach", cmdServoAttach);
-CreateSmartCommandF(cmdStepperReset_, "servo_reset", cmdStepperReset);
+CreateSmartCommandF(cmdStepperReset_, "stepper_reset", cmdStepperReset);
 CreateSmartCommandF(cmdOK_, "ok", cmdOK);
 
 void setup()
 {
-    // Serial.begin(BAUD_RATE);
+    #if SOFT_SERIAL
     ser.begin(BAUD_RATE);
+    #else
+    Serial.begin(BAUD_RATE);
+    #endif
+
     pinMode(LED_BUILTIN, OUTPUT);
     LED_ON();
 

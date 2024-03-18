@@ -218,6 +218,8 @@ public:
             {
                 // trim leading and trailing sepChars from _buffer
                 char *trimmedBuffer = __trimChar(_buffer, _sepChar);
+                // trim seemingly recurring char ff
+                trimmedBuffer = __trimChar(_buffer, (char)0xff);
                 // remove duplicate sepChars
                 __removeConsecutiveDuplicates(trimmedBuffer, _sepChar);
                 size_t trimmedBufferLen = strlen(trimmedBuffer);
