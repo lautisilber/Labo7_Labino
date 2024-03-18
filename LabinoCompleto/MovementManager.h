@@ -80,6 +80,7 @@ public:
     }
     void stepperAttach(bool attach) { _stepper.attach(attach); }
     inline long getStepperStep() const { return _stepper.getCurrentPosition(); }
+    inline void stepperResetPosition() { _stepper.resetPosition(); }
     //////////////
 
     /// servo ///

@@ -8,6 +8,7 @@
 #include "PWMHelper.h"
 
 #define RCV_COMMAND "rcv"
+#define BAUD_RATE 4800
 #define ARR_LEN(a) sizeof(a)/sizeof(a[0])
 
 // pins
@@ -31,7 +32,7 @@ MultipleHX711<nBalanzas> hx711(dataPins, sckPin);
 MovementManager movement(
     driverPins[0], driverPins[1], driverPins[2], driverPins[3], // stepper driver pins
     servoPin, // pin servo
-    1000, 10  // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
+    1000, 20  // stepper speed (ms per revolution), servo speed (delay in ms between each angle), pump speed (0 = 0%, 256 = 100% of the PWM duty cycle that controls the pump)
 );
 
 PWMPin pump(pumpPin, percent2dutyCycleI(50));
@@ -419,6 +420,17 @@ void cmdServoAttach(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
+void cmdStepperReset(Stream *stream, CommandArguments *comArgs)
+{
+    // cmd: stepper_reset
+    // setea el estado actual del stepper como la posicion 0
+
+    LED_ON();
+    movement.stepperResetPosition();
+    stream->println(F("OK"));
+    LED_OFF();
+}
+
 void cmdOK(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: ok
@@ -442,12 +454,13 @@ CreateSmartCommandF(cmdServo_, "servo", cmdServo);
 CreateSmartCommandF(cmdPump_, "pump", cmdPump);
 CreateSmartCommandF(cmdStepperAttach_, "stepper_attach", cmdStepperAttach);
 CreateSmartCommandF(cmdServoAttach_, "servo_attach", cmdServoAttach);
+CreateSmartCommandF(cmdStepperReset_, "servo_reset", cmdStepperReset);
 CreateSmartCommandF(cmdOK_, "ok", cmdOK);
 
 void setup()
 {
-    Serial.begin(9600);
-    ser.begin(9600);
+    // Serial.begin(BAUD_RATE);
+    ser.begin(BAUD_RATE);
     pinMode(LED_BUILTIN, OUTPUT);
     LED_ON();
 
@@ -466,6 +479,7 @@ void setup()
     ss.addCommand(&cmdPump_);
     ss.addCommand(&cmdStepperAttach_);
     ss.addCommand(&cmdServoAttach_);
+    ss.addCommand(&cmdStepperReset_);
     ss.addCommand(&cmdOK_);
 
     Serial.println("begin");

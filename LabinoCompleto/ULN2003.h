@@ -257,8 +257,9 @@ public:
         makeSteps(position - _currPosition);
     }
 
-    long getCurrentPosition() const { return _currPosition; }
-    bool attached() const { return _attached; }
+    inline long getCurrentPosition() const { return _currPosition; }
+    inline bool attached() const { return _attached; }
+    inline void resetPosition() { _currPosition = 0; }
 };
 
 #endif
