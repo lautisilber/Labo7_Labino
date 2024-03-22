@@ -6,137 +6,83 @@ from logging_helper import logger as lh
 from time import sleep
 from smart_arrays import SmartArray, UncertaintiesArray
 from smart_arrays import smart_array as sa
-from typing import Tuple
-# from timer_helper import RepeatedTimer
-# from arduino_controller import arduino_reset
+from typing import Optional
+from systems import SystemInfo, SystemsManager, Position, IntensityConfig, SerialManagerInfo, BalanzasInfo, StepperPos
+from dataclass_save import load_dataclass, save_dataclass
+from maintenance_circuit import Maintenance
 
 # change working directory to here
 import os
 abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
+del abspath, dname
 
-def tiempo_from_int(intensity: int) -> int:
-    return min(1600 + (min(max(intensity, 0), 10) * 180), 2000)
+def run(systems_manager: SystemsManager) -> None:
+    systems_manager.begin()
+    systems_manager.loop()
 
-def pwm_from_intensity(intensity: int) -> int:
-    return int(min(57 + (0 if intensity < 10 else (intensity-10) * 3.3 if intensity <= 20 else 100), 100))
+def show_positions(systems_manager: SystemsManager, system_index: int, wait_for_user_input: bool) -> None:
+    systems_manager.begin_single(system_index)
+    systems_manager.show_all_positions(system_index, wait_for_user_input)
 
-def water(sm: SerialManager, index: int, intensity: int):
-    sm.cmd_servo_attach(True)
-    sleep(1)
-    if index == 0:
-        sm.cmd_servo(25)
-    elif index == 1:
-        sm.cmd_servo(165)
+def go_home(systems_manager: SystemsManager, system_index: int, wait_for_user_input: bool) -> None:
+    systems_manager.begin_single(system_index)
+    systems_manager.go_home(system_index, wait_for_user_input)
 
-    tiempo_ms = tiempo_from_int(intensity)
-    pwm = pwm_from_intensity(intensity)
-    sm.cmd_pump(tiempo_ms, pwm)
+def calibrate(systems_manager: SystemsManager, system_index: int, n: int=200) -> None:
+    systems_manager.begin_single(system_index)
+    systems_manager.calibrate_system(system_index, n)
 
-    sm.cmd_servo_attach(True)
-    sm.cmd_servo(90)
-    sm.cmd_servo_attach(False)
-    
-def tick(sm: SerialManager, balanzas: Balanzas, file_manager: FileManager, n_balanzas: int, grams_goals: SmartArray, grams_threshold: float, intensities: int) -> Tuple[SmartArray, SmartArray]:
-    # leer datos
-    res = None
-    while res is None:
-        res = balanzas.read_stats()
-        if res is None:
-            sleep(5)
-            lh.warning('Main: No se pudo leer las balanzas. Volviendo a intentar...')
-    vals, n_filtered, n_unsuccessful = res
-    if len(vals) != n_balanzas:
-        lh.critical(f'Tick: Al leer se obtuvo una lista de largo {len(vals)} cuando hay {n_balanzas} balanzas')
- 
-    means = vals.values()
-    stdevs = vals.errors()
+def show_weights(systems_manager: SystemsManager, system_index: int, n: Optional[int]=None) -> None:
+    systems_manager.begin_single(system_index)
+    systems_manager.show_system_weights(system_index, n)
 
-    to_water = means < (grams_goals - grams_threshold)
-    for i, (w, intensity) in enumerate(zip(to_water, intensities)):
-        if w:
-            water(sm, i, intensity)
-            lh.info(f'Tick: Watering {i}, starting with weight {means[i]} +/- {stdevs[i]}, goal of {grams_goals[i]} and threashold of {grams_threshold}')
-
-    res = sm.cmd_dht()
-    if res is not None:
-        hum, temp = res
-    else:
-        hum = None
-        temp = None
-
-    file_manager.add_entry(
-        means, stdevs, to_water, n_filtered, n_unsuccessful,
-        grams_goals, grams_threshold, hum, temp
-    )
-
-    return means, to_water
-
-def calibrate():
-    lh.info('Main: Begin')
-    sm = SerialManager()
-    sm.open()
-
-    n_balanzas = None
-    while n_balanzas is None:
-        n_balanzas = sm.cmd_hx_n()
-        sleep(5)
-
-    balanzas = Balanzas(sm, n_balanzas)
-
-    balanzas_calibrate(sm, balanzas, n_balanzas, 200)
-
+def water_test(systems_manager: SystemsManager, system_index: int, balanza_index: int, intensity: int=0) -> None:
+    systems_manager.begin_single(system_index)
+    systems_manager.water_test(system_index, balanza_index, intensity)
 
 def main() -> None:
-    lh.info('Main: Begin')
-    sm = SerialManager()
-    sm.open()
+    sys_1 = SystemInfo(
+                name='system_1',
+                n_balanzas=6,
+                positions=(
+                    Position(0, 179, IntensityConfig(1600, 3000, 15, 5), IntensityConfig(53, 75, 30, 15)),    # pos 1
+                    Position(0, 1, IntensityConfig(1600, 3400, 15, 5), IntensityConfig(55, 80, 30, 15)),      # pos 2
+                    Position(4800, 1, IntensityConfig(1700, 3400, 15, 5), IntensityConfig(53, 80, 30, 15)),   # pos 3
+                    Position(5000, 172, IntensityConfig(1700, 3000, 15, 5), IntensityConfig(53, 75, 30, 15)), # pos 4
+                    Position(9700, 162, IntensityConfig(1900, 3500, 15, 2), IntensityConfig(53, 80, 30, 15)), # pos 5
+                    Position(9700, 20, IntensityConfig(1800, 3400, 15, 2), IntensityConfig(53, 80, 30, 15))   # pos 6
+                ),
+                stepper_pos=load_dataclass(StepperPos(save_file='system_1_stepper.json')),
+                sm_info=SerialManagerInfo(
+                    port='/dev/ttyACM0',
+                    baud_rate=9600
+                ),
+                balanzas_info=BalanzasInfo(
+                    save_file='system_1_balanzas.json',
+                    n_statistics=50,
+                    n_arduino=10
+                ),
+                grams_goals=(670.0,670.0,670.0,670.0,670.0,670.0),
+                grams_threshold=0.0
+            )
 
+    maintenance = Maintenance()
+    systems_manager = SystemsManager((sys_1,), maintenance)
 
-    while not sm.cmd_ok():
-        sleep(1)
+    # calibrate(systems_manager, 0, 500)
 
-    sm.cmd_servo_attach(False)
+    # show_positions(systems_manager, 0, True)
 
-    # while True:
-    #     print(sm.cmd_hx())
-    #     sleep(1)
+    # go_home(systems_manager, 0, True)
 
-    n_balanzas = None
-    while n_balanzas is None:
-        n_balanzas = sm.cmd_hx_n()
-        sleep(5)
+    # show_weights(systems_manager, 0, 10)
 
-    balanzas = Balanzas(sm, n_balanzas, n_statistics=50, n_arduino=20, err_threshold=30)
-    fm = FileManager(n_balanzas)
-    
-    grams_goals = SmartArray((660, 613))
-    grams_threshold: float = 2.0
+    # water_test(systems_manager, 0, 1)
 
-    if not n_balanzas == len(grams_goals):
-        raise Exception(f'Main: grams_goals wrong length. correct is {n_balanzas}')
+    run(systems_manager)
 
-    # t = RepeatedTimer(10, tick, sm, balanzas, fm, n_balanzas, grams_goals, grams_threshold, 1, 50)
-    # t.start()
-
-    ### Main Loop ###
-
-    intensities = sa.zeros(n_balanzas, int)
-    min_weight_diff = 5
-    last_weights, watered_last_tick = tick(sm, balanzas, fm, n_balanzas, grams_goals, grams_threshold, intensities)
-    while True:
-        weights, watered_last_tick = tick(sm, balanzas, fm, n_balanzas, grams_goals, grams_threshold, intensities)
-        weight_diff = abs(weights - last_weights)
-
-        # for i in range(n_balanzas):
-        #     if watered_last_tick[i]:
-        #         intensities[i] += weight_diff[i] < min_weight_diff[i]
-        #     else:
-        #         intensities[i] = 0
-        intensities = (watered_last_tick * (weight_diff < min_weight_diff)).int()
-        sleep(10)
 
 if __name__ == '__main__':
     main()
-

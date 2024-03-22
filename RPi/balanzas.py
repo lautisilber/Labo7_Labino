@@ -58,12 +58,12 @@ class Balanzas:
             return res
             
     def save(self) -> bool:
-        if any(a is None for a in (self.offsets, self.offsets_error, self.slopes, self.slopes_error)):
+        if any(a is None for a in (self.offsets, self.slopes)):
             lh.warning('Balanzas: No se pudo guardad calibracion porque se calibro aun')
             return False
         obj = {
             'offsets': list(self.offsets.values()),
-            'slopes': list(self.slopes.values),
+            'slopes': list(self.slopes.values()),
             'offsets_error': list(self.offsets.errors()),
             'slopes_error': list(self.slopes.errors())
         }
@@ -95,32 +95,50 @@ class Balanzas:
         err_threshold = self.err_threshold if err_threshold is None else err_threshold
         # si err_threshold <= 0, no se considera, y se toman todos los valores
 
-        vals = list() # [n, self.n_balanzas]
+        vals: List[SmartArray] = list() # [n, self.n_balanzas]
         for _ in trange(n):
             r = self.read_single_raw() # [self.n_balanzas]
             if r:
                 vals.append(r)
         n_completed = len(vals)
         n_error = n-n_completed
-        vals_t = list(zip(*vals)) # [self.n_balanzas, n]
+        vals_t: List[SmartArray] = list(zip(*vals)) # [self.n_balanzas, n]
 
-        means = list(mean(vals_balanza) for vals_balanza in vals_t) #np.mean(vals, axis=0) # should be of size self.n_balanzas
-        cleaned_vals = list() # sums, later to be divided. [self.n_balanzas, ?]
-        for i in range(self.n_balanzas):
-            cleaned_vals.append(list())
-            for j in range(n_completed):
-                val = vals_t[i][j]
-                diff = abs(val - means[i])
-                if diff <= err_threshold or err_threshold <= 0:
-                    cleaned_vals[-1].append(val)
+        # old method of filtering if data is more than err_threshold away from mean
+        # means = list(mean(vals_balanza) for vals_balanza in vals_t) #np.mean(vals, axis=0) # should be of size self.n_balanzas
+        # cleaned_vals = list() # sums, later to be divided. [self.n_balanzas, ?]
+        # for i in range(self.n_balanzas):
+        #     cleaned_vals.append(list())
+        #     for j in range(n_completed):
+        #         val = vals_t[i][j]
+        #         diff = abs(val - means[i])
+        #         if diff <= err_threshold or err_threshold <= 0:
+        #             cleaned_vals[-1].append(val)
 
-        if any(len(cv) == 0 for cv in cleaned_vals):
-            lh.error(f'Balanzas: cleaned_vals de forma [self.n_balanzas, ?] tiene una sublista de largo nulo')
-            return None
+        # if any(len(cv) == 0 for cv in cleaned_vals):
+        #     lh.error(f'Balanzas: cleaned_vals de forma [self.n_balanzas, ?] tiene una sublista de largo nulo (habiendo empezado con listas de largos {tuple(len(v) for v in vals_t)})')
+        #     return None
 
-        cleaned_means = SmartArray([mean(cv) for cv in cleaned_vals]) # [self.n_balanzas]
-        cleaned_stdevs = SmartArray([stdev(cv) for cv in cleaned_vals]) # [self.n_balanzas]
-        filtered_vals = SmartArray([n_completed-len(cv) for cv in cleaned_vals])  # [self.n_balanzas]
+        # new method of filtering by quartiles
+        sorted_vals: Tuple[List[float]] = tuple(sorted(v) for v in vals_t)
+
+        # Calculate quartiles
+        q1 = SmartArray(tuple(sorted_val[len(sorted_val) // 4] for sorted_val in sorted_vals))
+        q3 = SmartArray(tuple(sorted_val[(3 * len(sorted_val)) // 4] for sorted_val in sorted_vals))
+
+        # Interquartile range (IQR)
+        iqr = q3 - q1
+
+        # Define the lower and upper bounds
+        lower_bounds = q1 - (1.5 * iqr)
+        upper_bounds = q3 + (1.5 * iqr)
+
+        # Filter the data based on the bounds
+        filtered_vals: List[List[float]] = [[x for x in sorted_val if lower <= x <= upper] for sorted_val, lower, upper in zip(sorted_vals, lower_bounds, upper_bounds)]
+
+        cleaned_means = SmartArray([mean(fv) for fv in filtered_vals]) # [self.n_balanzas]
+        cleaned_stdevs = SmartArray([stdev(fv) for fv in filtered_vals]) # [self.n_balanzas]
+        filtered_vals = SmartArray([n_completed-len(fv) for fv in filtered_vals])  # [self.n_balanzas]
 
         lh.debug(f'Balanza: Se leyo las balanzas y hubo {n_error} veces que no se pudo leer del Arduino y {filtered_vals} valores que se descartaron por estadistica')
 
@@ -181,6 +199,7 @@ class Balanzas:
         res = self.read_stats_raw(n, err_threshold)
         if res is None:
             lh.error(f'Balanzas: No se pudo calibrar slope porque read_stats_raw() devolvio None')
+            raise ValueError()
 
         mean, err, _, _ = res
         val = UncertaintiesArray(mean, err)
@@ -201,13 +220,32 @@ class Balanzas:
         self.slopes = slope
         return True
         
-def calibrate(sm: SerialManager, balanzas: Balanzas, n_balanzas: int, n: int=100):
-    sm.cmd_servo_attach(False)
-
-    input('Remove todo el peso de las balanzas y apreta enter')
-    print('Tarando...')
-    balanzas.calibrate_offset(n, err_threshold=10000, err_lim=10000)
-    print(balanzas.offsets, balanzas.offsets_error)
+def calibrate(balanzas: Balanzas, n_balanzas: int, n: int=100, offset_temp_file: str='.tmp_balanzas_offset.json'):
+    if not os.path.isfile(offset_temp_file):
+        input('Remove todo el peso de las balanzas y apreta enter')
+        print('Tarando...')
+        balanzas.calibrate_offset(n, err_threshold=10000, err_lim=10000)
+        try:
+            d = {
+                'tare_vals': list(balanzas.offsets.values()),
+                'tare_errs': list(balanzas.offsets.errors())
+            }
+            with open(offset_temp_file, 'w') as f:
+                json.dump(d, f)
+        except Exception as err:
+            print(d)
+            lh.error(err)
+    else:
+        with open(offset_temp_file, 'r') as f:
+            d = json.load(f)
+            offsets = d['tare_vals']
+            offsets_errs = d['tare_errs']
+            offsets = UncertaintiesArray(offsets, offsets_errs)
+            if not len(offsets) == balanzas.n_balanzas:
+                raise ValueError()
+            balanzas.offsets = offsets
+        print('Continuando con una calibracion previa')
+    print(balanzas.offsets)
     res_b = False
     while not res_b:
         res = input('Introduci un peso conocido en cada balanza. Esribi los pesos y su error en el siguiente formato: (<numero>,<numero>,...)-<numero error>: ')
@@ -232,7 +270,9 @@ def calibrate(sm: SerialManager, balanzas: Balanzas, n_balanzas: int, n: int=100
         print('Listo!')
     else:
         print('No se pudo guardar el resultado de la calibracion. El resultado es:')
-        print('Offsets: ', balanzas.offsets, 'Offset errs: ', balanzas.offsets_error, 'Slopes', balanzas.slopes, 'Slope errs', balanzas.slopes_error)
+        print('Offsets: ', balanzas.offsets, 'Slopes', balanzas.slopes)
+
+    os.remove(offset_temp_file)
 
 if __name__ == '__main__':
     from time import sleep

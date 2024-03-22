@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Iterable, Optional, Literal, Union, List, Tuple, Callable
+from typing import Iterable, Optional, Literal, Union, List, Tuple, Callable, Generator
 import operator
 import math
 from uncertainties import umath
@@ -26,9 +26,13 @@ class UncertaintiesArray:
     def __init__(self, a: Optional[Union[Iterable, UncertaintiesArray, UncertaintiesList]]=None, b: Optional[Iterable]=None) -> None:
         if not isinstance(a, Iterable):
             raise TypeError('a is not iterable')
+        if isinstance(a, Generator):
+            a = tuple(a)
         if b is not None:
             if not isinstance(b, Iterable):
                 raise TypeError('b is not iterable')
+            if isinstance(b, Generator):
+                b = tuple(b)
             if len(a) != len(b):
                 raise IndexError('a and b are not of same size')
             if not (all(castable(e, float) for e in a) and all(castable(e, float) for e in b)):
@@ -226,4 +230,3 @@ class UncertaintiesList(UncertaintiesArray):
     
     def __repr__(self) -> str:
         return f'UncertaintiesList({list(self)})'
-

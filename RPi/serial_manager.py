@@ -48,7 +48,7 @@ class SerialManagerGeneric:
     END_CHAR = b'\n'
     SEP_CHAR = b' '
     
-    def __init__(self, port: str='/dev/ttyS0', baud_rate: int=9600, timeout: int=5, delay_s: int=.15, n_retries: int=3) -> None:
+    def __init__(self, port: str='/dev/ttyS0', baud_rate: int=4800, timeout: int=5, delay_s: int=.15, n_retries: int=3) -> None:
         devices = get_devices()
         if port not in devices:
             raise Exception(f'Port "{port}" is not among de available devices: {devices}')
@@ -103,12 +103,16 @@ class SerialManagerGeneric:
         lh.debug(f'Serial read: "{res}"')
         if not res:
             return None
-        res = res.decode('utf-8').rstrip()
+        try:
+            res = res.decode('utf-8').rstrip()
+        except UnicodeDecodeError as err:
+            lh.error(f'Serial read: "{err}". Original res: {res}')
+            res = None
         return res
     
 class SerialManager(SerialManagerGeneric):
     RCV_STR = 'rcv'
-    def __init__(self, port: str='/dev/ttyS0', baud_rate: int=9600, timeout: int=5, delay_s: int=0.1) -> None:
+    def __init__(self, port: str='/dev/ttyS0', baud_rate: int=4800, timeout: int=5, delay_s: int=0.5) -> None:
         super().__init__(port, baud_rate, timeout, delay_s)
         self._hx_n_init_time_s = 0
         self._hx_n_total_time_s = 30
@@ -147,11 +151,16 @@ class SerialManager(SerialManagerGeneric):
             res = self._send_command_wait_response(command, timeout_long_s, use_delay)
             if res is not None:
                 return res
+        print(f': {res}')
         return None
 
-    def cmd_ok(self) -> bool:
-        res = self._send_command_wait_response_retries('ok')
-        res = res == 'OK'
+    def cmd_ok(self, retries: int=5) -> bool:
+        res = False
+        n = 0
+        while not res and n < retries:
+            res = self._send_command_wait_response_retries('ok')
+            res = res == 'OK'
+            n += 1
         if not res:
             lh.warning('Arduino: Failed OK command')
         else:
@@ -167,6 +176,31 @@ class SerialManager(SerialManagerGeneric):
         if n < 0:
             raise ValueError()
         res = self._send_command_wait_response_retries(f'hx {n}')
+        if res:
+            try:
+                res = json.loads(res)
+            except:
+                res = None
+        if res is None:
+            lh.warning('Arduino: Failed hx command')
+        else:
+            lh.debug(f'Arduino: Succeeded hx ({res})')
+        return res
+    
+    def cmd_hx_single(self, index: int, n: int=20) -> Optional[List[float]]:
+        '''
+            index es el indice de la balanza a consultar
+            n son la cantidad de veces que se samplean las balanzas para obtener el promedio
+        '''
+        if not isinstance(index, int):
+            raise TypeError()
+        if index < 0:
+            raise ValueError()
+        if not isinstance(n, int):
+            raise TypeError()
+        if n < 0:
+            raise ValueError()
+        res = self._send_command_wait_response_retries(f'hx_single {n} {index}')
         if res:
             try:
                 res = json.loads(res)
@@ -210,23 +244,21 @@ class SerialManager(SerialManagerGeneric):
             lh.debug(f'Arduino: Succeeded dht command with {res}')
         return res
     
-    def cmd_stepper(self, posicion: Optional[int]=None) -> Optional[int]:
+    def cmd_stepper(self, steps: int, detach: bool=True) -> Optional[int]:
         '''
-            si posicion es un numero, es el indice de la posicion a la que se  el stepper.
-            devuelve la posicion en la que se encuentra el stepper al final
+            steps es el numero de pasos que el servo debe dar (si es negativo son pasos hacica atras)
+            si detach es positivo, se detachea el stepper al final
         '''
-        if not (isinstance(posicion, int) or posicion is None):
+        if not isinstance(steps, int) or not isinstance(detach, bool):
             raise TypeError()
-        if posicion < 0:
-            raise ValueError()
-        cmd = 'stepper' if posicion is None else f'stepper {posicion}'
-        res = self._send_command_wait_response_retries(cmd)
+        cmd = f'stepper {steps}' if not detach else f'stepper {steps} 1'
+        res = self._send_command_wait_response_retries(cmd, timeout_long_s=5*60)
         res = try_cast_omit_none(res, int)
         if res is None:
             lh.warning('Arduino: Failed stepper command')
         else:
             lh.debug(f'Arduino: Succeeded stepper command with {res}')
-        return res
+        return res == detach
     
     def cmd_servo(self, angulo: Optional[int]=None) -> Optional[int]:
         '''
@@ -262,31 +294,32 @@ class SerialManager(SerialManagerGeneric):
             lh.debug(f'Arduino: Succeeded pump command')
         return res
     
-    def cmd_stepper_attach(self, attach: Union[bool, Literal['true'], Literal['True'], Literal['TRUE'],
-                                             Literal['false'], Literal['False'], Literal['FALSE']]):
-        if not (isinstance(attach, bool) or any(attach == b for b in ('true', 'True', 'TRUE', 'false', 'False', 'FALSE'))):
+    def cmd_stepper_attach(self, attach: bool):
+        if not isinstance(attach, bool):
             raise TypeError()
-        res = self._send_command_wait_response_retries(f'stepper_attach {attach}')
+        res = self._send_command_wait_response_retries(f'stepper_attach {1 if attach else 0}')
         if res is None:
             lh.warning('Arduino: Failed stepper_attach command')
         else:
             lh.debug(f'Arduino: Succeeded stepper_attach command with {res}')
         return res
     
-    def cmd_servo_attach(self, attach: Union[bool, Literal['true'], Literal['True'], Literal['TRUE'],
-                                             Literal['false'], Literal['False'], Literal['FALSE']]):
-        if not (isinstance(attach, bool) or any(attach == b for b in ('true', 'True', 'TRUE', 'false', 'False', 'FALSE'))):
+    def cmd_servo_attach(self, attach: bool):
+        if not isinstance(attach, bool):
             raise TypeError()
-        res = self._send_command_wait_response_retries(f'servo_attach {attach}')
+        res = self._send_command_wait_response_retries(f'servo_attach {1 if attach else 0}')
         if res is None:
             lh.warning('Arduino: Failed servo_attach command')
         else:
             lh.debug(f'Arduino: Succeeded servo_attach command with {res}')
         return res
+        
     
 if __name__ == '__main__':
-    sm = SerialManager()
+    sm = SerialManager(port='/dev/ttyACM0', baud_rate=9600)
     sm.open()
-    print(sm.cmd_ok())
-    print(sm.cmd_hx())
 
+    print(sm.cmd_ok())
+    print(sm.cmd_hx(5))
+    for i in range(6):
+        print(f'{i}:', sm.cmd_hx_single(i, 5))

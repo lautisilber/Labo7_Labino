@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Iterable, Optional, Literal, Union, List, Tuple, Callable
+from typing import Iterable, Optional, Literal, Union, List, Tuple, Callable, Generator
 import operator
 import math
 from . import _generic_operations as go
@@ -42,6 +42,8 @@ class SmartArray:
         else:
             if not isinstance(a, Iterable):
                 raise TypeError()
+            if isinstance(a, Generator):
+                a = tuple(a)
             if dtype is None:
                 self.t = calculate_dominant_type_from_iter(a)
             else:
