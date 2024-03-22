@@ -251,15 +251,7 @@ public:
         _currPosition += steps;
     }
 
-    void goToPosition(long position)
-    {
-        // position is the step number
-        makeSteps(position - _currPosition);
-    }
-
-    inline long getCurrentPosition() const { return _currPosition; }
     inline bool attached() const { return _attached; }
-    inline void resetPosition() { _currPosition = 0; }
 };
 
 #endif

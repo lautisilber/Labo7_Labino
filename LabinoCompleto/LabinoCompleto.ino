@@ -237,38 +237,57 @@ void cmdDHT(Stream *stream, CommandArguments *comArgs)
 
 void cmdStepper(Stream *stream, CommandArguments *comArgs)
 {
-    // cmd: stepper ?<int:posicion>
-    // respuesta: <int:posicion>
-    // Devuelve la posicion actual del stepper del sistema de riego
+    // cmd: stepper <int:steps> <bool:detach>
+    // respuesta: <int:steps>
+    // Devuelve la cantidad de pasos dados
     // Si se transmitio un argumento, este debe ser uint32_t y es el paso al que se debe llevar el stepper
 
     LED_ON();
-    if (comArgs->N > 0)
+    if (comArgs->N < 0)
     {
-        // check if is a number
-        long step;
-        bool isInt = comArgs->toInt(0, &step);
+        stream->println(F("ERROR: No se proporciono un argumento numerico."));
+        LED_OFF();
+        return;
+    }
 
-        if (!isInt)
-        {
-            stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
-            stream->println(comArgs->arg(0));
-            LED_OFF();
-            return;
-        }
+    // check if is a number
+    long steps;
+    bool isInt = comArgs->toInt(0, &steps);
 
-        rcv(stream);
-        bool success = movement.stepperGoToStep(step);
-        if (!success)
+    if (!isInt)
+    {
+        stream->print(F("ERROR: El primer argumento no es un numero entero. El argumento es "));
+        stream->println(comArgs->arg(0));
+        LED_OFF();
+        return;
+    }
+
+    bool detach = false;
+    if (comArgs->N > 1)
+    {
+        // check if is a bool
+        bool isBool = comArgs->toBool(1, &detach);
+
+        if (!isBool)
         {
-            movement.printError(stream);
-            movement.printError(stream);
+            stream->print(F("ERROR: El segundo argumento no es un valor booleano. El argumento es "));
+            stream->println(comArgs->arg(1));
             LED_OFF();
             return;
         }
     }
 
-    stream->println(movement.getStepperStep());
+    rcv(stream);
+    bool success = movement.stepperMoveSteps(steps, detach);
+    if (!success)
+    {
+        movement.printError(stream);
+        movement.printError(stream);
+        LED_OFF();
+        return;
+    }
+
+    stream->println(detach ? F("1") : F("0"));
     LED_OFF();
 }
 
@@ -374,7 +393,7 @@ void cmdStepperAttach(Stream *stream, CommandArguments *comArgs)
         return;
     }
 
-    // check if is a number
+    // check if is a bool
     bool attach;
     bool isBool = comArgs->toBool(0, &attach);
 
@@ -426,17 +445,6 @@ void cmdServoAttach(Stream *stream, CommandArguments *comArgs)
     LED_OFF();
 }
 
-void cmdStepperReset(Stream *stream, CommandArguments *comArgs)
-{
-    // cmd: stepper_reset
-    // setea el estado actual del stepper como la posicion 0
-
-    LED_ON();
-    movement.stepperResetPosition();
-    stream->println(F("OK"));
-    LED_OFF();
-}
-
 void cmdOK(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: ok
@@ -463,7 +471,6 @@ CreateSmartCommandF(cmdServo_, "servo", cmdServo);
 CreateSmartCommandF(cmdPump_, "pump", cmdPump);
 CreateSmartCommandF(cmdStepperAttach_, "stepper_attach", cmdStepperAttach);
 CreateSmartCommandF(cmdServoAttach_, "servo_attach", cmdServoAttach);
-CreateSmartCommandF(cmdStepperReset_, "stepper_reset", cmdStepperReset);
 CreateSmartCommandF(cmdOK_, "ok", cmdOK);
 
 void setup()
@@ -492,7 +499,6 @@ void setup()
     ss.addCommand(&cmdPump_);
     ss.addCommand(&cmdStepperAttach_);
     ss.addCommand(&cmdServoAttach_);
-    ss.addCommand(&cmdStepperReset_);
     ss.addCommand(&cmdOK_);
 
     Serial.println("begin");
