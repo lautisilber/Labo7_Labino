@@ -8,6 +8,7 @@
 
 #define RCV_COMMAND "rcv"
 #define BAUD_RATE 9600
+#define SERIAL_CONFIG SERIAL_8E1
 #define SOFT_SERIAL false
 #define ARR_LEN(a) sizeof(a)/sizeof(a[0])
 
@@ -238,7 +239,7 @@ void cmdDHT(Stream *stream, CommandArguments *comArgs)
 void cmdStepper(Stream *stream, CommandArguments *comArgs)
 {
     // cmd: stepper <int:steps> <bool:detach>
-    // respuesta: <int:steps>
+    // respuesta: "OK"
     // Devuelve la cantidad de pasos dados
     // Si se transmitio un argumento, este debe ser uint32_t y es el paso al que se debe llevar el stepper
 
@@ -287,7 +288,7 @@ void cmdStepper(Stream *stream, CommandArguments *comArgs)
         return;
     }
 
-    stream->println(detach ? F("1") : F("0"));
+    stream->println(F("OK"));
     LED_OFF();
 }
 
@@ -476,9 +477,10 @@ CreateSmartCommandF(cmdOK_, "ok", cmdOK);
 void setup()
 {
     #if SOFT_SERIAL
+    #warning SoftwareSerial doesnt support parity bits
     ser.begin(BAUD_RATE);
     #else
-    Serial.begin(BAUD_RATE);
+    Serial.begin(BAUD_RATE, SERIAL_CONFIG);
     #endif
 
     pinMode(LED_BUILTIN, OUTPUT);
