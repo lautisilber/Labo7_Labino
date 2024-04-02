@@ -125,7 +125,7 @@ void cmdHX(Stream *stream, CommandArguments *comArgs)
 
 void cmdHXSingle(Stream *stream, CommandArguments *comArgs)
 {
-    // cmd: hx_single <int:n> <int:n>
+    // cmd: hx_single <int:n> <?int:n>
     // respuesta: 56
     // devuelve los datos de la balanza
 
@@ -133,7 +133,7 @@ void cmdHXSingle(Stream *stream, CommandArguments *comArgs)
 
     LED_ON();
 
-    if (comArgs->N < 2)
+    if (comArgs->N < 1)
     {
         stream->println(F("ERROR: No se proporcinaron dos argumentos numericos."));
         LED_OFF();
@@ -141,7 +141,7 @@ void cmdHXSingle(Stream *stream, CommandArguments *comArgs)
     }
 
     // extract argument 1
-    uint8_t n;
+    uint8_t index;
     {
         // check if arg 1 is a number
         long arg;
@@ -157,17 +157,20 @@ void cmdHXSingle(Stream *stream, CommandArguments *comArgs)
 
         if (arg < 1 || arg > 255)
         {
-            stream->print(F("ERROR: El argumento 1 debe ser un numero entre 1 y 255. El argumento es "));
+            stream->print(F("ERROR: El argumento 2 debe ser un indice entre 0 y "));
+            stream->print(nBalanzas-1);
+            stream->print(F(". El argumento es "));
             stream->println(arg);
             LED_OFF();
             return;
         }
 
-        n = static_cast<uint8_t>(arg);
+        index = static_cast<uint8_t>(arg);
     }
 
     // extract argument 2
-    size_t index;
+    size_t n = 1;
+    if (comArgs->N > 1)
     {
         long arg;
         bool isInt = comArgs->toInt(1, &arg);
@@ -182,15 +185,13 @@ void cmdHXSingle(Stream *stream, CommandArguments *comArgs)
 
         if (arg < 0 || arg > nBalanzas)
         {
-            stream->print(F("ERROR: El argumento 2 debe ser un indice entre 0 y "));
-            stream->print(nBalanzas-1);
-            stream->print(F(". El argumento es "));
+            stream->print(F("ERROR: El argumento 1 debe ser un numero entre 1 y 255. El argumento es "));
             stream->println(arg);
             LED_OFF();
             return;
         }
 
-        index = static_cast<size_t>(arg);
+        n = static_cast<size_t>(arg);
     }
     
     rcv(stream);
