@@ -347,8 +347,8 @@ void cmdPump(Stream *stream, CommandArguments *comArgs)
     }
 
     // check if it is a number
-    long tiempo;
-    bool isIntTiempo = comArgs->toInt(0, &tiempo);
+    long tiempoArg;
+    bool isIntTiempo = comArgs->toInt(0, &tiempoArg);
     if (!isIntTiempo)
     {
         stream->print(F("ERROR: El argumento no es un numero entero. El argumento es "));
@@ -356,6 +356,14 @@ void cmdPump(Stream *stream, CommandArguments *comArgs)
         LED_OFF();
         return;
     }
+    if (tiempoArg < 0)
+    {
+        stream->print(F("ERROR: El argumento debe ser un numero positivo. El argumento es "));
+        stream->println(tiempoArg);
+        LED_OFF();
+        return;
+    }
+    unsigned long tiempo = static_cast<unsigned long>(tiempoArg);
 
     long intensidadArg;
     bool isIntIntensidad = comArgs->toInt(1, &intensidadArg);
