@@ -1,6 +1,8 @@
-from typing import Any, Iterable
+from typing import Any, Iterable, Union
 
-def castable(v: Any, t: type) -> bool:
+scalar_t = Union[bool, int, float, complex]
+
+def castable(v: Any, t: scalar_t) -> bool:
     c = False
     try:
         t(v)
@@ -9,17 +11,17 @@ def castable(v: Any, t: type) -> bool:
         c = False
     return c
 
-def calculate_dominant_type(t1: type, t2: type) -> type:
+def calculate_dominant_type(t1: type, t2: type) -> scalar_t:
     ts = (complex, float, int, bool)
     for t in ts:
         if t1 is t or t2 is t:
             return t
     raise TypeError()
 
-def calculate_dominant_type_from_iter(it: Iterable) -> type:
-    ts = (complex, float, int, bool)
+def calculate_dominant_type_from_iter(it: Iterable) -> scalar_t:
+    ts = (bool, int, float, complex)
     # ls = list(ts) # TODO: remove
     for t in ts:
-        if any(isinstance(e, t) for e in it):
+        if all(isinstance(e, t) for e in it):
             return t
     raise TypeError()

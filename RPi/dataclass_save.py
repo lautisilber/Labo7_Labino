@@ -5,7 +5,6 @@ from typing import Optional, get_origin, Any, TypeVar, Type
 
 T = TypeVar('T')
 
-
 def _populate_dataclass_from_dict(cls: Type[T], example: T, obj: dict) -> T:
     field_types = {f.name: f.type for f in dataclasses.fields(cls)}
     new_obj = dict()
@@ -42,7 +41,7 @@ def _populate_dataclass_from_dict(cls: Type[T], example: T, obj: dict) -> T:
             new_obj[field_name] = type(example_attr)(obj[field_name])
     return cls(**new_obj)
 
-def load_dataclass(defaults: T, save_file: Optional[str]=None) -> T:
+def load_dataclass_json(defaults: T, save_file: Optional[str]=None) -> T:
     '''
         Loads a dataclass of type type(cls) from the file save_file
         If defaults is not None, it should be of same type as cls
@@ -55,10 +54,10 @@ def load_dataclass(defaults: T, save_file: Optional[str]=None) -> T:
     if not dataclasses.is_dataclass(cls):
         raise TypeError('cls is not a dataclass')
     if save_file is None:
-        if hasattr(defaults, 'save_file'):
-            save_file = defaults.save_file
+        if hasattr(defaults, '_save_file'):
+            save_file = defaults._save_file
         else:
-            raise ValueError(f'defaults and save_file arguments are both None. Cannot load {cls}')
+            raise ValueError(f'defaults._save_file and save_file arguments are both None. Cannot load {cls}')
     file_exists = os.path.isfile(save_file)
     if not file_exists:
         return dataclasses.replace(defaults)
@@ -67,12 +66,12 @@ def load_dataclass(defaults: T, save_file: Optional[str]=None) -> T:
             d = json.load(f)
         return _populate_dataclass_from_dict(cls, defaults, d)
 
-def save_dataclass(cls_instance: T, save_file: Optional[str]=None) -> bool:
+def save_dataclass_json(cls_instance: T, save_file: Optional[str]=None) -> bool:
     if not dataclasses.is_dataclass(cls_instance.__class__):
         raise TypeError('cls is not a dataclass')
     if save_file is None:
-        if hasattr(cls_instance, 'save_file'):
-            save_file = cls_instance.save_file
+        if hasattr(cls_instance, '_save_file'):
+            save_file = cls_instance._save_file
         else:
             Exception('Instance has no attribute \'save_file\'')
     dirname = os.path.dirname(save_file)
@@ -83,6 +82,9 @@ def save_dataclass(cls_instance: T, save_file: Optional[str]=None) -> bool:
         raise TypeError('__dict__ method should return a dict')
     with open(save_file, 'w') as f:
         json.dump(obj, f)
+
+
+
 
 
 if __name__ == '__main__':
@@ -116,6 +118,6 @@ if __name__ == '__main__':
 
     fname = '.dataclass_save_test.json'
 
-    r = load_dataclass(C, c, fname)
+    r = load_dataclass_json(C, c, fname)
     print(r)
-    save_dataclass(r, fname)
+    save_dataclass_json(r, fname)

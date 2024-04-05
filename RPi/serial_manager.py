@@ -1,4 +1,8 @@
-import serial
+from config import TEST
+if not TEST:
+    import serial
+else:
+    from dummy_classes import dummy_serial as serial
 from time import sleep, time
 from typing import List, Optional, Tuple, Any, Union, Literal
 import sys
@@ -47,15 +51,16 @@ def try_cast_omit_none(v: Any, t: type) -> Optional[Any]:
 class SerialManagerGeneric:
     END_CHAR = b'\n'
     SEP_CHAR = b' '
-    
-    def __init__(self, port: str='/dev/ttyS0', baud_rate: int=4800, timeout: int=5, delay_s: int=.15, n_retries: int=3) -> None:
-        devices = get_devices()
-        if port not in devices:
-            raise Exception(f'Port "{port}" is not among de available devices: {devices}')
+
+    def __init__(self, port: str='/dev/ttyS0', baud_rate: int=4800, timeout: int=5, delay_s: float=.15, n_retries: int=3, parity: Literal['N', 'E', 'O']='E') -> None:
+        if not TEST:
+            devices = get_devices()
+            if port not in devices:
+                raise Exception(f'Port "{port}" is not among de available devices: {devices}')
         self.port = port
         self.baud_rate = baud_rate
         self.timeout = timeout
-        self.delay_s = delay_s
+        self.delay_s = delay_s if not TEST else 0
         self.n_retries = n_retries
 
         self.serial = serial.Serial()
@@ -64,7 +69,7 @@ class SerialManagerGeneric:
         self.serial.timeout = self.timeout
         self.serial.write_timeout = self.timeout
         self.serial.bytesize = serial.EIGHTBITS
-        self.serial.parity = serial.PARITY_NONE
+        self.serial.parity = parity
         self.serial.stopbits = serial.STOPBITS_ONE # probably
 
     def close(self, log: bool=True) -> None:
@@ -109,11 +114,11 @@ class SerialManagerGeneric:
             lh.error(f'Serial read: "{err}". Original res: {res}')
             res = None
         return res
-    
+
 class SerialManager(SerialManagerGeneric):
     RCV_STR = 'rcv'
-    def __init__(self, port: str='/dev/ttyS0', baud_rate: int=4800, timeout: int=5, delay_s: int=0.5) -> None:
-        super().__init__(port, baud_rate, timeout, delay_s)
+    def __init__(self, port: str='/dev/ttyS0', baud_rate: int=4800, parity: Literal['N', 'E', 'O']='E', timeout: int=5, delay_s: float=0.5) -> None:
+        super().__init__(port, baud_rate, timeout, delay_s, parity=parity)
         self._hx_n_init_time_s = 0
         self._hx_n_total_time_s = 30
         self._last_hx_n: Optional[int] = None
@@ -123,7 +128,7 @@ class SerialManager(SerialManagerGeneric):
             raise serial.PortNotOpenError()
         if not command:
             return None
-        
+
         self.flush()
         self.write(command)
         if use_delay:
@@ -147,6 +152,7 @@ class SerialManager(SerialManagerGeneric):
 
     def _send_command_wait_response_retries(self, command: str, timeout_long_s: int=30, use_delay: bool=True, n_retries: Optional[int]=None) -> Optional[str]:
         n_retries = max(self.n_retries if n_retries is None else n_retries, 1)
+        res = None
         for _ in range(n_retries):
             res = self._send_command_wait_response(command, timeout_long_s, use_delay)
             if res is not None:
@@ -166,7 +172,7 @@ class SerialManager(SerialManagerGeneric):
         else:
             lh.debug('Arduino: OK command successful')
         return res
-    
+
     def cmd_hx(self, n: int=20) -> Optional[List[float]]:
         '''
             n son la cantidad de veces que se samplean las balanzas para obtener el promedio
@@ -186,7 +192,7 @@ class SerialManager(SerialManagerGeneric):
         else:
             lh.debug(f'Arduino: Succeeded hx ({res})')
         return res
-    
+
     def cmd_hx_single(self, index: int, n: int=20) -> Optional[List[float]]:
         '''
             index es el indice de la balanza a consultar
@@ -211,7 +217,7 @@ class SerialManager(SerialManagerGeneric):
         else:
             lh.debug(f'Arduino: Succeeded hx ({res})')
         return res
-    
+
     def cmd_hx_n(self) -> Optional[int]:
         '''
             devuelve la cantidad de balanzas
@@ -229,22 +235,22 @@ class SerialManager(SerialManagerGeneric):
         else:
             lh.debug(f'Arduino: Used cached hx_n value of {self._last_hx_n}')
             return self._last_hx_n
-    
+
     def cmd_dht(self) -> Optional[Tuple[float, float]]: # hum, temp
         res = self._send_command_wait_response_retries('dht')
+        if res is None:
+            lh.warning('Arduino: Failed dht command. Returned None')
+            return None
         if res:
             try:
                 res = json.loads(res)
                 res = res['hum'], res['temp']
             except:
+                lh.warning(f'Arduino: Failed dht command. Couldn\'t parse json: {res}')
                 res = None
-        if res is None:
-            lh.warning('Arduino: Failed dht command')
-        else:
-            lh.debug(f'Arduino: Succeeded dht command with {res}')
         return res
-    
-    def cmd_stepper(self, steps: int, detach: bool=True) -> Optional[int]:
+
+    def cmd_stepper(self, steps: int, detach: bool=True) -> bool:
         '''
             steps es el numero de pasos que el servo debe dar (si es negativo son pasos hacica atras)
             si detach es positivo, se detachea el stepper al final
@@ -253,13 +259,13 @@ class SerialManager(SerialManagerGeneric):
             raise TypeError()
         cmd = f'stepper {steps}' if not detach else f'stepper {steps} 1'
         res = self._send_command_wait_response_retries(cmd, timeout_long_s=5*60)
-        res = try_cast_omit_none(res, int)
-        if res is None:
+        res = res == 'OK'
+        if not res:
             lh.warning('Arduino: Failed stepper command')
         else:
             lh.debug(f'Arduino: Succeeded stepper command with {res}')
-        return res == detach
-    
+        return res
+
     def cmd_servo(self, angulo: Optional[int]=None) -> Optional[int]:
         '''
             si angulo es un numero, es el angulo al que se llevara el stepper.
@@ -277,7 +283,7 @@ class SerialManager(SerialManagerGeneric):
         else:
             lh.debug(f'Arduino: Succeeded servo command with {res}')
         return res
-    
+
     def cmd_pump(self, tiempo: int, intensidad: int) -> bool:
         '''
             prende la bomba por el tiempo en ms indicado, en la intensidad en % indicada
@@ -293,7 +299,7 @@ class SerialManager(SerialManagerGeneric):
         else:
             lh.debug(f'Arduino: Succeeded pump command')
         return res
-    
+
     def cmd_stepper_attach(self, attach: bool):
         if not isinstance(attach, bool):
             raise TypeError()
@@ -303,7 +309,7 @@ class SerialManager(SerialManagerGeneric):
         else:
             lh.debug(f'Arduino: Succeeded stepper_attach command with {res}')
         return res
-    
+
     def cmd_servo_attach(self, attach: bool):
         if not isinstance(attach, bool):
             raise TypeError()
@@ -313,13 +319,14 @@ class SerialManager(SerialManagerGeneric):
         else:
             lh.debug(f'Arduino: Succeeded servo_attach command with {res}')
         return res
-        
-    
+
+
 if __name__ == '__main__':
-    sm = SerialManager(port='/dev/ttyACM0', baud_rate=9600)
+    sm = SerialManager(port='/dev/ttyACM0', baud_rate=9600, parity='E')
     sm.open()
 
     print(sm.cmd_ok())
     print(sm.cmd_hx(5))
-    for i in range(6):
-        print(f'{i}:', sm.cmd_hx_single(i, 5))
+    print(sm.cmd_dht())
+    # for i in range(6):
+    #     print(f'{i}:', sm.cmd_hx_single(i, 5))

@@ -4,6 +4,11 @@ from collections.abc import Iterable
 from typing import Union
 import os
 
+# change working directory to here
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath) # directory of this file
+del abspath
+
 class LoggingLevelFilter(logging.Filter):
     def __init__(self, logging_levels: Union[int, Iterable[int]]):
         super().__init__()
@@ -20,9 +25,9 @@ logger.setLevel(logging.DEBUG)
 formatter_file = logging.Formatter(f'%(levelname)s: %(asctime)s > module: %(module)s > func_name: %(funcName)s > line_nr: %(lineno)d -> %(message)s')
 formatter_print = logging.Formatter(f'%(levelname)s: %(asctime)s > module: %(module)s > func_name: %(funcName)s > line_nr: %(lineno)d -> %(message)s')
 
-fname_debug = 'log/labino.debug.log'
-fname_info = 'log/labino.info.log'
-fname_error = 'log/labino.err.log'
+fname_debug = os.path.join(dname, 'log', 'labino.debug.log')
+fname_info = os.path.join(dname, 'log', 'labino.info.log')
+fname_error = os.path.join(dname, 'log', 'labino.err.log')
 
 for fname_ in (fname_debug, fname_info, fname_error):
     dirname = os.path.dirname(os.path.abspath(fname_))

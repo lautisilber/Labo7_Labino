@@ -8,6 +8,7 @@ from uncertainties import ufloat
 from . import _generic_operations as go
 from ._utils import castable
 from .smart_array import SmartArray, SmartList
+import os, json
 
 
 
@@ -21,6 +22,45 @@ def zeros(size: int) -> UncertaintiesArray:
 
 def sqrt(a: UncertaintiesArray) -> UncertaintiesArray:
     return UncertaintiesArray(go._generic_unary_op(a, math.sqrt))
+
+def dump_dict(array: Union[UncertaintiesArray, UncertaintiesList]) -> dict[str, Union[str,List[List[float]]]]:
+    if isinstance(array, UncertaintiesArray):
+        kind = 'uncertainties_array'
+    elif isinstance(array, UncertaintiesList):
+        kind = 'uncertainties_list'
+    else:
+        raise TypeError(f'array is not a UncertaintiesArray nor a UncertaintiesList. It is instead of type {type(array)}')
+    obj = {
+        'library': 'smart_array',
+        'kind': kind,
+        'dtype': None,
+        'array': array.__list__()
+    }
+    return obj
+
+def dump(array: Union[UncertaintiesArray, UncertaintiesList], save_file: str) -> None:
+    obj = dump_dict(array)
+    d = os.path.dirname(save_file)
+    if d:
+        if not os.path.isdir(d):
+            os.makedirs(d)
+    with open(save_file, 'w') as f:
+        json.dump(obj, f)
+
+def load_dict(obj: dict[str, Union[str,List[List[float]]]]) -> Union[SmartArray, SmartList]:
+    if not obj['library'] == 'smart_array': raise ValueError()
+    if not isinstance(obj['array'], Iterable): raise ValueError()
+    if obj['kind'] == 'uncertainties_array':
+        return UncertaintiesArray(obj['array'][0], obj['array'][1])
+    elif obj['kind'] == 'uncertainties_list':
+        return UncertaintiesList(obj['array'][0], obj['array'][1])
+    else:
+        raise ValueError()
+    
+def load(save_file: str) -> Union[SmartArray, SmartList]:
+    with open(save_file, 'r') as f:
+        obj = json.load(f)
+    return load_dict(obj)
 
 class UncertaintiesArray:
     def __init__(self, a: Optional[Union[Iterable, UncertaintiesArray, UncertaintiesList]]=None, b: Optional[Iterable]=None) -> None:
@@ -80,7 +120,10 @@ class UncertaintiesArray:
     
     def errors(self) -> SmartArray:
         return SmartArray(tuple(e.std_dev for e in self), dtype=float)
-    
+
+    def dump(self, save_file: str) -> None:
+        dump(self, save_file)
+
     # math ops
 
     def __add__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
@@ -186,7 +229,7 @@ class UncertaintiesArray:
     # utils
 
     def __list__(self) -> List:
-        return self.arr.tolist()
+        return [list(self.values()), list(self.errors())]
 
     def __repr__(self) -> str:
         return f'UncertaintiesArray({list(self)})'
@@ -195,8 +238,8 @@ class UncertaintiesArray:
         return self.__repr__()
     
 class UncertaintiesList(UncertaintiesArray):
-    def __init__(self, a: Optional[Union[Iterable, UncertaintiesArray]]=None) -> None:
-        super().__init__(a)
+    def __init__(self, a: Optional[Union[Iterable, UncertaintiesArray, UncertaintiesList]]=None, b: Optional[Iterable]=None) -> None:
+        super().__init__(a, b)
 
     def copy(self) -> UncertaintiesList:
         return UncertaintiesList(self)

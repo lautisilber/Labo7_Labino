@@ -6,12 +6,12 @@ from smart_arrays import SmartArray
 
 
 class FileManager:
-    def __init__(self, n_balanzas: int, fname: str='data.csv') -> None:
+    def __init__(self, n_balanzas: int, save_file: str='data.csv') -> None:
         self.n_balanzas = n_balanzas
-        self.fname = fname
-        self.dirname = os.path.dirname(os.path.abspath(self.fname))
+        self.save_file = save_file
+        self.dirname = os.path.dirname(os.path.abspath(self.save_file))
 
-    def add_entry(self, b_means: SmartArray, b_stdevs: SmartArray, pump_states: SmartArray, n_filtered: SmartArray, n_unsuccessful: float, grams_goals: SmartArray, grams_threshold: float, dht_hum: Optional[float], dht_temp: Optional[float]) -> bool:
+    def add_entry(self, b_means: SmartArray, b_stdevs: SmartArray, pump_states: SmartArray, n_filtered: SmartArray, n_unsuccessful: float, grams_goals: tuple, grams_thresholds: tuple, dht_hum: Optional[float], dht_temp: Optional[float]) -> bool:
         if not os.path.isdir(self.dirname):
             os.makedirs(self.dirname)
 
@@ -19,8 +19,8 @@ class FileManager:
             lh.error(f'File Manager: Lengths of arrays do not match or are not {self.n_balanzas}. Lengths are {b_means.shape[0]}, {b_stdevs.shape[0]}, {pump_states.shape[0]}')
             return False
 
-        first_time = not os.path.isfile(self.fname)
-        with open(self.fname, 'a') as f:
+        first_time = not os.path.isfile(self.save_file)
+        with open(self.save_file, 'a') as f:
             if first_time:
                 f.write('time,')
                 for i in range(self.n_balanzas):
@@ -29,7 +29,7 @@ class FileManager:
             now_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
             f.write(now_str + ',')
             for i in range(self.n_balanzas):
-                f.write(f'{b_means[i]},{b_stdevs[i]},{1 if pump_states[i] else 0},{n_filtered[i]},{grams_goals[i]},{grams_threshold},')
+                f.write(f'{b_means[i]},{b_stdevs[i]},{1 if pump_states[i] else 0},{n_filtered[i]},{grams_goals[i]},{grams_thresholds[i]},')
             f.write(f'{n_unsuccessful},{dht_hum if dht_hum is not None else ""},{dht_temp if dht_temp is not None else ""}\n')
         
         return True

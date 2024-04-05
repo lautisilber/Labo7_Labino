@@ -32,7 +32,7 @@ class Balanzas:
     def load(self) -> bool:
         res = False
         if not os.path.isfile(self.save_file):
-            lh.info('Balanzas: No se pudo cargar calibracion porque no existe el archivo')
+            lh.info(f'Balanzas: No se pudo cargar calibracion porque no existe el archivo. (Deberia estar en {self.save_file})')
             return res
         with open(self.save_file, 'r') as f:
             try:
@@ -56,7 +56,7 @@ class Balanzas:
                 lh.warning(f'Balanzas: No se pudo cargar calibracion con error {err}')
                 res = False
             return res
-            
+
     def save(self) -> bool:
         if any(a is None for a in (self.offsets, self.slopes)):
             lh.warning('Balanzas: No se pudo guardad calibracion porque se calibro aun')
@@ -77,7 +77,7 @@ class Balanzas:
         except Exception as err:
             lh.warning(f'Balanzas: No se pudo guardar calibracion ({err})')
             return False
-    
+
     def read_single_raw(self) -> Optional[SmartArray]:
         res = self.sm.cmd_hx(self.n_arduino)
         if res is None:
@@ -89,7 +89,7 @@ class Balanzas:
         if not all(isinstance(r, float) for r in res):
             lh.error(f'Balanzas: El tipo de dato de las balanzas no es el correcto ({res})')
         return SmartArray(res)
-    
+
     def read_stats_raw(self, n: Optional[int]=None, err_threshold: Optional[float]=None) -> Optional[Tuple[SmartArray, SmartArray, SmartArray, float]]: # [mean, stdev, n_stats_filtered_vals, n_unsuccessful_reads]
         n = self.n_statistics if n is None else n
         err_threshold = self.err_threshold if err_threshold is None else err_threshold
@@ -143,7 +143,7 @@ class Balanzas:
         lh.debug(f'Balanza: Se leyo las balanzas y hubo {n_error} veces que no se pudo leer del Arduino y {filtered_vals} valores que se descartaron por estadistica')
 
         return cleaned_means, cleaned_stdevs, filtered_vals, n_error
-    
+
     def read_stats(self, n: Optional[int]=None, err_threshold: Optional[float]=None) -> Optional[Tuple[UncertaintiesArray, SmartArray, float]]: # [mean, stdev, n_stats_filtered_vals, n_unsuccessful_reads]
         if any(a is None for a in (self.offsets, self.slopes)):
             raise Exception('Balanzas have not been calibrated')
@@ -163,7 +163,7 @@ class Balanzas:
 
         lh.debug(f'Balanza: read_stats -> {values.values()}, {values.errors()}, {filtered_vals}, {unsuccessful_reads}')
         return values, filtered_vals, unsuccessful_reads
-    
+
     def calibrate_offset(self, n: Optional[int]=None, err_threshold: Optional[float]=None, err_lim: float=1) -> bool:
         n = self.n_statistics*2 if n is None else n
         err_threshold = self.err_threshold if err_threshold is None else err_threshold
@@ -181,7 +181,7 @@ class Balanzas:
         val = UncertaintiesArray(mean, err)
         self.offsets = val
         return True
-    
+
     def calibrate_slope(self, weights: UncertaintiesArray, n: Optional[int]=None, err_threshold: Optional[float]=None, err_lim: float=1) -> bool:
         n = self.n_statistics*2 if n is None else n
         err_threshold = self.err_threshold if err_threshold is None else err_threshold
@@ -192,7 +192,7 @@ class Balanzas:
         if len(weights) != self.n_balanzas:
             lh.error(f'Balanzas: Couldn\'t calibrate slope since the provided weight list is not of size {self.n_balanzas}. The provided weight list is {weights}')
             return False
-        
+
         if not isinstance(weights, UncertaintiesArray):
             raise TypeError('weights no es una instancia de UncertaintiesArray')
 
@@ -219,7 +219,7 @@ class Balanzas:
 
         self.slopes = slope
         return True
-        
+
 def calibrate(balanzas: Balanzas, n_balanzas: int, n: int=100, offset_temp_file: str='.tmp_balanzas_offset.json'):
     if not os.path.isfile(offset_temp_file):
         input('Remove todo el peso de las balanzas y apreta enter')
@@ -265,7 +265,7 @@ def calibrate(balanzas: Balanzas, n_balanzas: int, n: int=100, offset_temp_file:
             print('No se pudieron convertir los valores introducidos como numeros. Intenta de nuevo')
     print('Calibrando...')
     balanzas.calibrate_slope(weights, n, err_threshold=1000, err_lim=1000)
-    
+
     if balanzas.save():
         print('Listo!')
     else:

@@ -4,7 +4,7 @@ from typing import Callable
 from logging_helper import logger as lh
 from enum import Enum, auto
 
-maintenance_cb_t = Callable[[None], None]
+maintenance_cb_t = Callable[[], None]
 
 class Maintenance:
     class LedState(Enum):
@@ -21,14 +21,14 @@ class Maintenance:
         self.led_pin = Led(pin=led_pin, active_high=True)
         self._led_state = Maintenance.LedState.ON
         self.led_on(force=True)
-    
+
     def begin_maintenance(self, callback: maintenance_cb_t) -> None:
         if not isinstance(callback, Callable): raise TypeError()
         def wrapper():
             self.led_blink()
             callback()
         self.button_pin.when_deactivated = wrapper
-    
+
     def end_maintenance(self, callback: maintenance_cb_t) -> None:
         if not isinstance(callback, Callable): raise TypeError()
         def wrapper():
@@ -45,7 +45,7 @@ class Maintenance:
         if force or self._led_state != Maintenance.LedState.PULSE:
             self.led_pin.pulse(fade_in_time=1, fade_out_time=1, n=None, background=True)
             self._led_state = Maintenance.LedState.PULSE
-    
+
     def led_blink(self, force: bool=False):
         if force or self._led_state != Maintenance.LedState.BLINK:
             self.led_pin.blink(on_time=0.5, off_time=0.5, fade_in_time=0, fade_out_time=0, n=None, background=True)
