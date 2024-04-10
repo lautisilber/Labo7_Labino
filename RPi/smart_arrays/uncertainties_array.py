@@ -1,275 +1,132 @@
-from __future__ import annotations
-from typing import Iterable, Optional, Literal, Union, List, Tuple, Callable, Generator
-import operator
-import math
-from uncertainties import umath
-from uncertainties.core import AffineScalarFunc as ufloat_t
-from uncertainties import ufloat
-from . import _generic_operations as go
-from ._utils import castable
-from .smart_array import SmartArray, SmartList
-import os, json
+from typing import Iterable
+from .smart_array_base import SmartArrayBase, SmartListBase
+from .smart_array import SmartArrayFloat, SmartListFloat
+from uncertainties import ufloat, umath
+from typing import Optional, Union, Self
+from numbers import Real
+import operator as op
 
+ufloat_or_real = Union[ufloat, Real]
 
-
-def filled(size: int, value: Union[ufloat_t]) -> UncertaintiesArray:
-    if size < 0:
-        raise ValueError()
-    return UncertaintiesArray([value]*size)
-
-def zeros(size: int) -> UncertaintiesArray:
-    return filled(size, 0)
-
-def sqrt(a: UncertaintiesArray) -> UncertaintiesArray:
-    return UncertaintiesArray(go._generic_unary_op(a, math.sqrt))
-
-def dump_dict(array: Union[UncertaintiesArray, UncertaintiesList]) -> dict[str, Union[str,List[List[float]]]]:
-    if isinstance(array, UncertaintiesArray):
-        kind = 'uncertainties_array'
-    elif isinstance(array, UncertaintiesList):
-        kind = 'uncertainties_list'
-    else:
-        raise TypeError(f'array is not a UncertaintiesArray nor a UncertaintiesList. It is instead of type {type(array)}')
-    obj = {
-        'library': 'smart_array',
-        'kind': kind,
-        'dtype': None,
-        'array': array.__list__()
-    }
-    return obj
-
-def dump(array: Union[UncertaintiesArray, UncertaintiesList], save_file: str) -> None:
-    obj = dump_dict(array)
-    d = os.path.dirname(save_file)
-    if d:
-        if not os.path.isdir(d):
-            os.makedirs(d)
-    with open(save_file, 'w') as f:
-        json.dump(obj, f)
-
-def load_dict(obj: dict[str, Union[str,List[List[float]]]]) -> Union[SmartArray, SmartList]:
-    if not obj['library'] == 'smart_array': raise ValueError()
-    if not isinstance(obj['array'], Iterable): raise ValueError()
-    if obj['kind'] == 'uncertainties_array':
-        return UncertaintiesArray(obj['array'][0], obj['array'][1])
-    elif obj['kind'] == 'uncertainties_list':
-        return UncertaintiesList(obj['array'][0], obj['array'][1])
-    else:
-        raise ValueError()
-    
-def load(save_file: str) -> Union[SmartArray, SmartList]:
-    with open(save_file, 'r') as f:
-        obj = json.load(f)
-    return load_dict(obj)
-
-class UncertaintiesArray:
-    def __init__(self, a: Optional[Union[Iterable, UncertaintiesArray, UncertaintiesList]]=None, b: Optional[Iterable]=None) -> None:
-        if not isinstance(a, Iterable):
-            raise TypeError('a is not iterable')
-        if isinstance(a, Generator):
-            a = tuple(a)
+class UncertaintiesArray(SmartArrayBase[ufloat]):
+    def __init__(self, a: Union[Iterable[Real], Iterable[ufloat]], b: Optional[Iterable[Real]]=None) -> None:
         if b is not None:
-            if not isinstance(b, Iterable):
-                raise TypeError('b is not iterable')
-            if isinstance(b, Generator):
-                b = tuple(b)
-            if len(a) != len(b):
-                raise IndexError('a and b are not of same size')
-            if not (all(castable(e, float) for e in a) and all(castable(e, float) for e in b)):
-                raise TypeError('not all elements of a and b are castable to float')
-            a = list(ufloat(e1, e2) for e1, e2 in zip(a, b))
-        if isinstance(a, UncertaintiesArray):
-            self.arr = a.arr.copy()
+            b = list(b)
+            if not len(a) == len(b):
+                raise ValueError('a and b are not of same length')
+            if not (all(isinstance(e, Real) for e in a) and all(isinstance(e, Real) for e in b)):
+                raise TypeError(f'Not all values of a or b are of type {Real}')
+            a: list[ufloat] = [ufloat(e1, e2) for e1, e2 in zip(a, b)]
         else:
-            if not all(isinstance(e, ufloat_t) for e in a):
-                raise TypeError('not all elements of the iterable are of type ufloat_t')
-            if isinstance(a, list):
-                self.arr = a.copy()
-            else:
-                self.arr = list(a)
+            if not all(isinstance(e, ufloat) for e in a):
+                raise TypeError(f'Not all values of a are of type {ufloat}')
+            a: list[ufloat] = list(a)
+        super().__init__(a, ufloat)
 
-    @property
-    def size(self) -> int:
-        return len(self.arr)
+    def values(self) -> SmartArrayFloat:
+        return SmartArrayFloat([e.nominal_value for e in self.arr])
     
-    def __len__(self) -> int:
-        return self.size
+    def errors(self) -> SmartArrayFloat:
+        return SmartArrayFloat([e.std_dev for e in self.arr])
     
-    def __iter__(self):
-        return iter(self.arr)
+    @classmethod
+    def zeros(cls, n: int) -> Self:
+        return cls.filled(n, ufloat(0.0, 0.0), ufloat)
     
-    def __getitem__(self, key: int) -> ufloat_t:
-        return self.arr[key]
-    
-    def __setitem__(self, key: int, value: ufloat_t):
-        if not isinstance(value, ufloat_t):
-            raise TypeError()
-        self.arr[key] = value
-
-    def reverse(self) -> None:
-        self.arr.reverse()
-
-    def sort(self, *args, key: Optional[Callable]=None, reverse: bool=False) -> None:
-        self.arr.sort(*args, key=key, reverse=reverse)
-
-    def copy(self) -> UncertaintiesArray:
-        return UncertaintiesArray(self)
-    
-    def values(self) -> SmartArray:
-        return SmartArray(tuple(e.nominal_value for e in self), dtype=float)
-    
-    def errors(self) -> SmartArray:
-        return SmartArray(tuple(e.std_dev for e in self), dtype=float)
-
-    def dump(self, save_file: str) -> None:
-        dump(self, save_file)
-
     # math ops
 
-    def __add__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op(self, other, operator.add, ufloat_t))
+    def __add__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.add))
     
-    def __sub__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op(self, other, operator.sub, ufloat_t))
+    def __sub__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.sub))
     
-    def __mul__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op(self, other, operator.mul, ufloat_t))
+    def __mul__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.mul))
     
-    def __truediv__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op(self, other, operator.truediv, ufloat_t))
+    def __truediv__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.truediv), dtype=float)
     
-    def __floordiv__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op(self, other, operator.floordiv, ufloat_t))
+    def __floordiv__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.floordiv), dtype=int)
     
-    def __pow__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op(self, other, umath.pow, ufloat_t))
+    def __pow__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, umath.pow))
     
-    def __mod__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op(self, other, umath.fmod, ufloat_t))
-    
-    def __radd__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
+    def __radd__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
         return self.__add__(other)
     
-    def __rsub__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op_rightsided(other, self, operator.sub, ufloat_t))
+    def __rsub__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.sub))
 
-    def __rmul__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
+    def __rmul__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
         return self.__mul__(other)
     
-    def __rtruediv__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op_rightsided(other, self, operator.truediv, ufloat_t))
+    def __rtruediv__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.truediv), dtype=float)
     
-    def __rfloordiv__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op_rightsided(other, self, operator.floordiv, ufloat_t))
-    
-    def __rmod__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_op_rightsided(other, self, operator.fmod, ufloat_t))
+    def __rfloordiv__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.floordiv), dtype=int)
     
     # unary ops
 
-    def __abs__(self) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_unary_op(self.arr, abs))
+    def __abs__(self) -> Self:
+        return self.__class__(self._unary_op(op.abs))
     
-    def __pos__(self) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_unary_op(self.arr, operator.pos))
+    def __pos__(self) -> Self:
+        return self.__class__(self._unary_op(op.pos))
     
-    def __neg__(self) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_unary_op(self.arr, operator.neg))
+    def __neg__(self) -> Self:
+        return self.__class__(self._unary_op(op.neg))
     
-    def __invert__(self) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_unary_op(self.arr, operator.invert))
-    
-    def __ceil__(self) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_unary_op(self.arr, umath.ceil))
-
-    def __floor__(self) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_unary_op(self.arr, umath.floor))
-
-    def __trunc__(self) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_unary_op(self.arr, umath.trunc))
+    def __invert__(self) -> Self:
+        return self.__class__(self._unary_op(op.invert))
 
     # bool ops
 
-    def __eq__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op(self, other, operator.eq, ufloat_t))
+    def __eq__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.eq), dtype=bool)
     
-    def __ne__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op(self, other, operator.ne, ufloat_t))
+    def __ne__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.ne), dtype=bool)
     
-    def __lt__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op(self, other, operator.lt, ufloat_t))
+    def __lt__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.lt), dtype=bool)
     
-    def __gt__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op(self, other, operator.gt, ufloat_t))
+    def __gt__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.gt), dtype=bool)
     
-    def __le__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op(self, other, operator.le, ufloat_t))
+    def __le__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.le), dtype=bool)
     
-    def __ge__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op(self, other, operator.ge, ufloat_t))
+    def __ge__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_left(other, op.ge), dtype=bool)
     
-    def __req__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op_rightsided(other, self, operator.eq, ufloat_t))
+    def __req__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.eq), dtype=bool)
     
-    def __rne__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op_rightsided(other, self, operator.ne, ufloat_t))
+    def __rne__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.ne), dtype=bool)
     
-    def __rlt__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op_rightsided(other, self, operator.lt, ufloat_t))
+    def __rlt__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.lt), dtype=bool)
     
-    def __rgt__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op_rightsided(other, self, operator.gt))
+    def __rgt__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.gt), dtype=bool)
     
-    def __rle__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op_rightsided(other, self, operator.le))
+    def __rle__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.le), dtype=bool)
     
-    def __rge__(self, other: Union[UncertaintiesArray, float, int, ufloat_t]) -> UncertaintiesArray:
-        return UncertaintiesArray(go._generic_binary_logic_op_rightsided(other, self, operator.ge))
+    def __rge__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(self._binary_logic_op_right(other, op.ge), dtype=bool)
+    
 
-    # utils
+class UncertaintiesList(UncertaintiesArray, SmartListBase):
+    def __init__(self, a: Union[Iterable[Real], Iterable[ufloat]], b: Optional[Iterable[Real]] = None) -> None:
+        super(UncertaintiesArray, self).__init__(a, b)
 
-    def __list__(self) -> List:
-        return [list(self.values()), list(self.errors())]
-
-    def __repr__(self) -> str:
-        return f'UncertaintiesArray({list(self)})'
+    def values(self) -> SmartListFloat:
+        return SmartListFloat([e.nominal_value for e in self.arr])
     
-    def __str__(self) -> str:
-        return self.__repr__()
-    
-class UncertaintiesList(UncertaintiesArray):
-    def __init__(self, a: Optional[Union[Iterable, UncertaintiesArray, UncertaintiesList]]=None, b: Optional[Iterable]=None) -> None:
-        super().__init__(a, b)
-
-    def copy(self) -> UncertaintiesList:
-        return UncertaintiesList(self)
-    
-    def values(self) -> SmartList:
-        return SmartList((e.nominal_value for e in self), dtype=float)
-    
-    def errors(self) -> SmartList:
-        return SmartList((e.std_dev for e in self), dtype=float)
-
-    def append(self, x: ufloat_t) -> None:
-        if not isinstance(x, ufloat_t):
-            raise TypeError()
-        self.arr.append(x)
-    
-    def extend(self, it: Iterable) -> None:
-        if not all(isinstance(e, ufloat_t) for e in it):
-            raise TypeError()
-        self.arr.extend(it)
-
-    def clear(self) -> None:
-        self.arr.clear()
-
-    def insert(self, i: int, x: ufloat_t) -> None:
-        if not isinstance(x, ufloat_t):
-            raise TypeError()
-        self.arr.index(i, x)
-
-    def pop(self, i: int) -> ufloat_t:
-        return self.arr.pop(i)
-    
-    def __repr__(self) -> str:
-        return f'UncertaintiesList({list(self)})'
+    def errors(self) -> SmartListFloat:
+        return SmartListFloat([e.std_dev for e in self.arr])

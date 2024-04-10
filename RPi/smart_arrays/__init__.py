@@ -1,9 +1,11 @@
-from ._check_dependencies import uncertainties_exists
+from .smart_array import (
+    SmartArrayReal, SmartArrayFloat, SmartArrayInt, SmartListBool,
+    SmartListReal, SmartListFloat, SmartListInt, SmartListBool
+)
 
-from .smart_array import SmartArray, SmartList
-if uncertainties_exists:
+try:
+    import uncertainties
     from .uncertainties_array import UncertaintiesArray, UncertaintiesList
     __all__ = ['smart_array', 'uncertainties_array']
-else:
+except ModuleNotFoundError:
     __all__ = ['smart_array']
-

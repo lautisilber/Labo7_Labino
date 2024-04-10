@@ -3,10 +3,10 @@ from serial_manager import SerialManager
 from balanzas import Balanzas
 from balanzas import calibrate as balanzas_calibrate
 from file_manager import FileManager
-from smart_arrays import SmartArray
 from camera_controller import CameraController
-import smart_arrays.smart_array as sa
 from logging_helper import logger as lh
+import numpy as np
+from type_hints import *
 
 import utils
 
@@ -266,11 +266,11 @@ class System:
 
         self.stepper_pos: int = 0
 
-        self.intensities = sa.zeros(self.n_balanzas, int)
-        self.last_weights: Optional[SmartArray] = None
+        self.intensities = np.zeros(self.n_balanzas, dtype=np_int)
+        self.last_weights: Optional[np_arr_float_1D] = None
         # this name is awful but it is intended for keeping track of how many consecutive times a balanza was
         # meant to be watered, but its weight change was lower than a threshold value
-        self.intensities_unchanged_times = sa.zeros(self.n_balanzas, int)
+        self.intensities_unchanged_times = np.zeros(self.n_balanzas, dtype=np_int)
 
         if watering_min_diff_grams >= watering_max_diff_grams:
             raise ValueError(f'System {self.name}. watering_min_diff_grams has to be lower than watering_max_diff_grams. ({watering_min_diff_grams}, {watering_max_diff_grams})')
@@ -279,7 +279,7 @@ class System:
         self.watering_max_unchanged_times = watering_max_unchanged_times
         self.watering_intensity_lowering_rate = watering_intensity_lowering_rate
 
-        self.inhabilitated_balanzas: SmartArray = sa.zeros(self.n_balanzas, bool)
+        self.inhabilitated_balanzas = np.zeros(self.n_balanzas, dtype=np_bool)
 
         self.history_length = history_length
         self.history_weights: tuple[deque[float],...] = tuple(deque(maxlen=self.history_length) for _ in range(self.history_length))
@@ -287,7 +287,7 @@ class System:
         self.history_intensities: tuple[deque[int],...] = tuple(deque(maxlen=self.history_length) for _ in range(self.history_length))
         self.history_datetimes: deque[datetime] = deque(maxlen=self.history_length)
         self.history_failed_checks: tuple[deque[bool],...] = tuple(deque(maxlen=self.history_length) for _ in range(self.history_length))
-        self.history_inhabilitated_balanzas: deque[SmartArray] = deque(maxlen=self.history_length)
+        self.history_inhabilitated_balanzas: deque[np_arr_bool] = deque(maxlen=self.history_length)
 
     @property
     def save_file_stepper(self) -> str:
@@ -297,10 +297,10 @@ class System:
         return os.path.join(self.save_dir, 'config', f'history_{self.name}.pkl')
     @property
     def save_file_inhabilitated(self) -> str:
-        return os.path.join(self.save_dir, 'config', f'inhabilitated_{self.name}.json')
+        return os.path.join(self.save_dir, 'config', f'inhabilitated_{self.name}.txt')
     @property
     def save_file_intensities(self) -> str:
-        return os.path.join(self.save_dir, 'config', f'intensities_{self.name}.json')
+        return os.path.join(self.save_dir, 'config', f'intensities_{self.name}.txt')
 
     def _create_save_dir(self, dirname: Optional[str]=None) -> None:
         if dirname is None: dirname = self.save_dir
@@ -339,8 +339,8 @@ class System:
         )
         with open(fname, 'wb') as f:
             pickle.dump(objs, f)
-    def load_history(self) -> tuple[bool,bool,bool,bool,bool,bool]:
-        s = sa.zeros(6, bool)
+    def load_history(self) -> tuple[bool,...]:
+        s = np.zeros(self.n_balanzas, dtype=np_bool)
         fname = self.save_file_history
         if not os.path.isdir(fname): return tuple(s)
         with open(fname, 'rb') as f:
@@ -404,11 +404,11 @@ class System:
         # inhabilitated_balanzas
         history_inhabilitated_balanzas = objs[5]
         if isinstance(history_inhabilitated_balanzas, deque):
-            if all(isinstance(e, SmartArray) for e in history_inhabilitated_balanzas):
+            if all(isinstance(e, np.array) for e in history_inhabilitated_balanzas):
                 s[5] = True
         if s[5]:
             history_inhabilitated_balanzas = deque(history_inhabilitated_balanzas, maxlen=self.history_length)
-            self.history_inhabilitated_balanzas: deque[SmartArray] = history_inhabilitated_balanzas
+            self.history_inhabilitated_balanzas: deque[np_arr_bool_1D] = history_inhabilitated_balanzas
         else:
             lh.warning(f'System {self.name}: Bad histories pickle')
 
@@ -417,27 +417,35 @@ class System:
     def save_inhabilitated_balanzas(self) -> None:
         fname = self.save_file_inhabilitated
         self._create_save_dir(os.path.dirname(fname))
-        sa.dump(self.inhabilitated_balanzas, fname)
+        np.savetxt(fname, self.inhabilitated_balanzas)
     def load_inhabilitated_balanzas(self) -> bool:
         fname = self.save_file_inhabilitated
         if not os.path.isfile(fname):
             return False
-        inhabilitated_balanzas = sa.load(fname)
-        if not inhabilitated_balanzas.dtype is bool or len(inhabilitated_balanzas) != self.n_balanzas:
-            raise ValueError(f'System {self.name}: loaded bad inhabilitated_balanzas')
+        inhabilitated_balanzas = np.loadtxt(fname)
+        try:
+            inhabilitated_balanzas = inhabilitated_balanzas.astype(bool)
+        except:
+            raise ValueError(f'System {self.name}: loaded bad inhabilitated_balanzas. Bad typing')
+        if len(inhabilitated_balanzas) != self.n_balanzas:
+            raise ValueError(f'System {self.name}: loaded bad inhabilitated_balanzas. Bad size')
         self.inhabilitated_balanzas = inhabilitated_balanzas
 
     def save_intensities(self) -> None:
         fname = self.save_file_intensities
         self._create_save_dir(os.path.dirname(fname))
-        sa.dump(self.intensities, fname)
+        np.savetxt(fname, self.intensities)
     def load_intensities(self) -> bool:
         fname = self.save_file_intensities
         if not os.path.isfile(fname):
             return False
-        intensities = sa.load(fname)
-        if not intensities.dtype is int or len(intensities) != self.n_balanzas:
-            raise ValueError(f'System {self.name}: loaded bad inhabilitated_balanzas')
+        intensities = np.loadtxt(fname)
+        try:
+            intensities = intensities.astype(np_int)
+        except:
+            raise ValueError(f'System {self.name}: loaded bad intensities. Bad typing')
+        if len(intensities) != self.n_balanzas:
+            raise ValueError(f'System {self.name}: loaded bad intensities. Bas size')
         self.intensities = intensities
 
     def begin(self) -> None:
@@ -560,6 +568,10 @@ class System:
             lh.critical((f'check before watering: sistema {self.name}, balanza {balanza_index} '
                         f'-> No paso el chequeo para regar. El peso es negativo ({history_weight[-1]})'))
             return False
+        
+        if history_weight[-1] < 50:
+            lh.critical((f'check before watering: sistema {self.name}, balanza {balanza_index} '
+                        f'-> No paso el chequeo para regar. El peso es menor a 50 gramos({history_weight[-1]}). Se presume que no hay maceta'))
 
         recent_history = self.history_length - 15
         if len(history_watering) >= recent_history:
@@ -585,7 +597,7 @@ class System:
         # TODO: seguir completando casos
         return True
 
-    def _update_intensities(self, curr_weights: SmartArray, watered_last_tick: SmartArray) -> None:
+    def _update_intensities(self, curr_weights: np_arr_float_1D, watered_last_tick: np_arr_bool_1D) -> None:
         '''
         the intensities will be updated in the following fashion.
         the difference between current and last weights is calculated.
@@ -625,19 +637,16 @@ class System:
             if res is None:
                 sleep(1)
                 lh.warning(f'Sistema {self.name}: No se pudo leer las balanzas. Volviendo a intentar...')
-        vals, n_filtered, n_unsuccessful = res
-        if len(vals) != self.n_balanzas:
-            lh.warning(f'Sistema {self.name}: Al leer se obtuvo una lista de largo {len(vals)} cuando hay {self.n_balanzas} balanzas')
+        means, stdevs, n_filtered, n_unsuccessful = res
+        if not (len(means) == len(stdevs) == self.n_balanzas):
+            lh.warning(f'Sistema {self.name}: Al leer se obtuvo una lista de largo {len(means)}, {len(stdevs)} cuando hay {self.n_balanzas} balanzas')
 
-        means = vals.values()
-        stdevs = vals.errors()
-
-        macetas_to_water = SmartArray(
-            (ws.should_water(w) for w, ws in zip(means, self.watering_schemes)), bool
+        macetas_to_water = np.array(
+            tuple(ws.should_water(w) for w, ws in zip(means, self.watering_schemes)), dtype=np_bool
         )
 
         # agregar datos de mediciones para chequear que todo esta en orden
-        all_right = sa.zeros(self.n_balanzas, bool)
+        all_right = np.zeros(self.n_balanzas, dtype=np_bool)
         self.history_datetimes.append(datetime.now())
         for i in range(self.n_balanzas):
             self.history_weights[i].append(means[i])
@@ -645,7 +654,7 @@ class System:
             self.history_intensities[i].append(self.intensities[i])
             all_right[i] = self._check_all_right(i)
             self.history_failed_checks[i].append(all_right[i])
-        lh.debug(f'Datos de mediciones - sistema {self.name}: pesos={vals}, a_regar={macetas_to_water}, intensidades={self.intensities}')
+        lh.debug(f'Datos de mediciones - sistema {self.name}: pesos=({means}+/-{stdevs}), a_regar={macetas_to_water}, intensidades={self.intensities}')
 
         goals = tuple(self.watering_schemes[i].current_goal for i in range(self.n_balanzas))
         grams_goals = tuple(e[0] for e in goals)

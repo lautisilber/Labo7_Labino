@@ -2,7 +2,8 @@ import os
 from datetime import datetime
 from logging_helper import logger as lh
 from typing import Optional
-from smart_arrays import SmartArray
+import numpy as np
+from type_hints import *
 
 
 class FileManager:
@@ -11,7 +12,7 @@ class FileManager:
         self.save_file = save_file
         self.dirname = os.path.dirname(os.path.abspath(self.save_file))
 
-    def add_entry(self, b_means: SmartArray, b_stdevs: SmartArray, pump_states: SmartArray, n_filtered: SmartArray, n_unsuccessful: float, grams_goals: tuple, grams_thresholds: tuple, dht_hum: Optional[float], dht_temp: Optional[float]) -> bool:
+    def add_entry(self, b_means: np_arr_float_1D, b_stdevs: np_arr_float_1D, pump_states: np_arr_bool_1D, n_filtered: np_arr_int_1D, n_unsuccessful: int, grams_goals: tuple, grams_thresholds: tuple, dht_hum: Optional[float], dht_temp: Optional[float]) -> bool:
         if not os.path.isdir(self.dirname):
             os.makedirs(self.dirname)
 
