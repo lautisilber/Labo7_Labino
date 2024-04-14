@@ -4,12 +4,17 @@ if not TEST:
     from maintenance_circuit import Maintenance
 else:
     from dummy_classes.dummy_maintenance_circuit import Maintenance
-from typing import Optional
+from typing import Optional, Sequence, Union
 from time import sleep
 
 class SystemsManager:
-    def __init__(self, systems: tuple[System, ...]) -> None:
-        self.systems = tuple(systems)
+    def __init__(self, systems: Union[Sequence[System], System]) -> None:
+        if isinstance(systems, System):
+            self.systems = (systems,)
+        elif isinstance(systems, Sequence):
+            self.systems = tuple(systems)
+        else:
+            raise TypeError(f'systems was not a sequence of System or System. Instead was {type(systems)}')
         self.n_systems = len(self.systems)
 
         # flags

@@ -1,27 +1,29 @@
-from typing import Iterable
-from .smart_array_base import SmartArrayBase, SmartListBase
+from typing import Collection
+from .smart_array_base import SmartArray, SmartList
 from .smart_array import SmartArrayFloat, SmartListFloat
 from uncertainties import ufloat, umath
-from typing import Optional, Union, Self
-from numbers import Real
+from uncertainties.core import AffineScalarFunc as ufloat_type
+from typing import Optional, Union, Self, Collection, Set
+# from numbers import Real
 import operator as op
 
-ufloat_or_real = Union[ufloat, Real]
+ufloat_or_real = Union[ufloat_type, float]
 
-class UncertaintiesArray(SmartArrayBase[ufloat]):
-    def __init__(self, a: Union[Iterable[Real], Iterable[ufloat]], b: Optional[Iterable[Real]]=None) -> None:
+
+class UncertaintiesArray(SmartArray[ufloat_type]):
+    def __init__(self, a: Union[Collection[ufloat_type], Collection[float]], b: Optional[Collection[float]]=None) -> None:
         if b is not None:
             b = list(b)
             if not len(a) == len(b):
                 raise ValueError('a and b are not of same length')
-            if not (all(isinstance(e, Real) for e in a) and all(isinstance(e, Real) for e in b)):
-                raise TypeError(f'Not all values of a or b are of type {Real}')
-            a: list[ufloat] = [ufloat(e1, e2) for e1, e2 in zip(a, b)]
+            if not (all(isinstance(e, float) for e in a) and all(isinstance(e, float) for e in b)):
+                raise TypeError(f'Not all values of a or b are of type {float}')
+            a_: list[ufloat_type] = [ufloat(e1, e2) for e1, e2 in zip(a, b)]
         else:
-            if not all(isinstance(e, ufloat) for e in a):
-                raise TypeError(f'Not all values of a are of type {ufloat}')
-            a: list[ufloat] = list(a)
-        super().__init__(a, ufloat)
+            if not all(isinstance(e, ufloat_type) for e in a):
+                raise TypeError(f'Not all values of a are of type ufloat ({ufloat_type})')
+            a_: list[ufloat_type] = list(a) # type: ignore
+        super().__init__(a_, ufloat_type, _skip_type_checking=True)
 
     def values(self) -> SmartArrayFloat:
         return SmartArrayFloat([e.nominal_value for e in self.arr])
@@ -31,98 +33,98 @@ class UncertaintiesArray(SmartArrayBase[ufloat]):
     
     @classmethod
     def zeros(cls, n: int) -> Self:
-        return cls.filled(n, ufloat(0.0, 0.0), ufloat)
+        return cls.filled(n, ufloat(0.0, 0.0))
     
     # math ops
 
-    def __add__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.add))
+    def __add__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_left(other, op.add)))
     
-    def __sub__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.sub))
+    def __sub__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self: # type: ignore
+        return self.__class__(tuple(self._binary_op_left(other, op.sub)))
     
-    def __mul__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.mul))
+    def __mul__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_left(other, op.mul)))
     
-    def __truediv__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.truediv), dtype=float)
+    def __truediv__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_left(other, op.truediv)))
     
-    def __floordiv__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.floordiv), dtype=int)
+    def __floordiv__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_left(other, op.floordiv)))
     
-    def __pow__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, umath.pow))
+    def __pow__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_left(other, umath.pow))) # type: ignore
     
-    def __radd__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+    def __radd__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
         return self.__add__(other)
     
-    def __rsub__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.sub))
+    def __rsub__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_right(other, op.sub)))
 
-    def __rmul__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
+    def __rmul__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
         return self.__mul__(other)
     
-    def __rtruediv__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.truediv), dtype=float)
+    def __rtruediv__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_right(other, op.truediv)))
     
-    def __rfloordiv__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.floordiv), dtype=int)
+    def __rfloordiv__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_right(other, op.floordiv)))
+    
+    def __rpow__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_op_right(other, umath.pow))) # type: ignore
     
     # unary ops
 
     def __abs__(self) -> Self:
-        return self.__class__(self._unary_op(op.abs))
+        return self.__class__(tuple(self._unary_op(op.abs))) # type: ignore
     
     def __pos__(self) -> Self:
-        return self.__class__(self._unary_op(op.pos))
+        return self.__class__(tuple(self._unary_op(op.pos))) # type: ignore
     
     def __neg__(self) -> Self:
-        return self.__class__(self._unary_op(op.neg))
-    
-    def __invert__(self) -> Self:
-        return self.__class__(self._unary_op(op.invert))
+        return self.__class__(tuple(self._unary_op(op.neg))) # type: ignore
 
     # bool ops
 
-    def __eq__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.eq), dtype=bool)
+    def __eq__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self: # type: ignore
+        return self.__class__(tuple(self._binary_logic_op_left(other, op.eq))) # type: ignore
     
-    def __ne__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.ne), dtype=bool)
+    def __ne__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self: # type: ignore
+        return self.__class__(tuple(self._binary_logic_op_left(other, op.ne))) # type: ignore
     
-    def __lt__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.lt), dtype=bool)
+    def __lt__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_logic_op_left(other, op.lt))) # type: ignore
     
-    def __gt__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.gt), dtype=bool)
+    def __gt__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_logic_op_left(other, op.gt))) # type: ignore
     
-    def __le__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.le), dtype=bool)
+    def __le__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_logic_op_left(other, op.le))) # type: ignore
     
-    def __ge__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_left(other, op.ge), dtype=bool)
+    def __ge__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_logic_op_left(other, op.ge))) # type: ignore
     
-    def __req__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.eq), dtype=bool)
+    def __req__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__eq__(other)
     
-    def __rne__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.ne), dtype=bool)
+    def __rne__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__ne__(other)
     
-    def __rlt__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.lt), dtype=bool)
+    def __rlt__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_logic_op_right(other, op.lt))) # type: ignore
     
-    def __rgt__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.gt), dtype=bool)
+    def __rgt__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_logic_op_right(other, op.gt))) # type: ignore
     
-    def __rle__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.le), dtype=bool)
+    def __rle__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_logic_op_right(other, op.le))) # type: ignore
     
-    def __rge__(self, other: Union[Iterable[ufloat_or_real], ufloat_or_real]) -> Self:
-        return self.__class__(self._binary_logic_op_right(other, op.ge), dtype=bool)
+    def __rge__(self, other: Union[Collection[ufloat_or_real], ufloat_or_real]) -> Self:
+        return self.__class__(tuple(self._binary_logic_op_right(other, op.ge))) # type: ignore
     
 
-class UncertaintiesList(UncertaintiesArray, SmartListBase):
-    def __init__(self, a: Union[Iterable[Real], Iterable[ufloat]], b: Optional[Iterable[Real]] = None) -> None:
+class UncertaintiesList(UncertaintiesArray, SmartList):
+    def __init__(self, a: Union[Collection[ufloat_type], Collection[float]], b: Optional[Collection[float]] = None) -> None:
         super(UncertaintiesArray, self).__init__(a, b)
 
     def values(self) -> SmartListFloat:

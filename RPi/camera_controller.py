@@ -1,7 +1,7 @@
 from __future__ import annotations
 from config import TEST
 if not TEST:
-    from picamera import PiCamera
+    from picamera import PiCamera # type: ignore
 else:
     from dummy_classes.dummy_picamera import PiCamera
 from typing import Optional, Tuple, Union, Dict, Any
@@ -26,7 +26,7 @@ class CameraController:
         source: str
         output: str
         overwrite: bool=True
-        timeout: Union[float, int]=60
+        timeout: float=60
         framerate: int=30
         args: Tuple[Any,...]=tuple()
 
@@ -50,16 +50,20 @@ class CameraController:
 
     @property
     def resolution(self) -> int:
-        return self.camera.resolution
+        return self.camera.resolution # type: ignore
 
     def __del__(self) -> None:
         if CameraController.recording:
             self.camera.stop_recording()
 
+    @property
+    def get_save_path(self) -> str:
+        return os.path.join(self.save_dir, datetime.now().strftime('%Y_%m_%d__%H_%M_%S') + '.h264')
+
     def start_recording(self) -> bool:
         if CameraController.recording: return False
 
-        path = os.path.join(self.save_dir, datetime.now().strftime('%Y_%m_%d__%H_%M_%S') + '.h264')
+        path = self.get_save_path
 
         # create dir if it doesnt exist
         if not os.path.isdir(self.save_dir):
@@ -91,6 +95,8 @@ class CameraController:
         self.camera.stop_recording()
         CameraController.recording = False
         lh.debug(f'Stopped recording to file {self.last_conversion_path}')
+        if self.last_conversion_path is None:
+            self.last_conversion_path = self.get_save_path
         base, ext = os.path.splitext(self.last_conversion_path)
         new_path = base + '.mp4'
         
@@ -104,14 +110,14 @@ class CameraController:
         
         self._add_conversion_to_queue(CameraController.ConversionTarget(source=self.last_conversion_path, output=new_path))
 
-    def schedule_start_recording(self, delay_s: Union[float, int]) -> None:
+    def schedule_start_recording(self, delay_s: float) -> None:
         if delay_s <= 0:
             raise ValueError()
         s = scheduler()
         s.enter(delay_s, priority=10, action=self.start_recording)
         s.run(blocking=False) # TODO: Test if this works
 
-    def schedule_stop_recording(self, delay_s: Union[float, int]) -> None:
+    def schedule_stop_recording(self, delay_s: float) -> None:
         if delay_s <= 0:
             raise ValueError()
         s = scheduler()
@@ -123,8 +129,10 @@ class CameraController:
         self.schedule_stop_recording(length_s)
 
     def _add_conversion_to_queue(self, ct: CameraController.ConversionTarget) -> bool:
-        if len(self.conversion_queue) >= self.conversion_queue.maxlen: return False
+        if self.conversion_queue.maxlen is not None:
+            if len(self.conversion_queue) >= self.conversion_queue.maxlen: return False
         self.conversion_queue.appendleft(ct)
+        return True
     
     def _h264_to_mp4(self, ct: CameraController.ConversionTarget) -> bool:
         if CameraController.converting: return False

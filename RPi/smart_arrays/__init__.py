@@ -1,6 +1,10 @@
 from .smart_array import (
-    SmartArrayReal, SmartArrayFloat, SmartArrayInt, SmartListBool,
-    SmartListReal, SmartListFloat, SmartListInt, SmartListBool
+    SmartArrayComplex, SmartArrayFloat, SmartArrayInt, SmartArrayBool,
+    SmartListComplex, SmartListFloat, SmartListInt, SmartListBool,
+)
+
+from .smart_array_base import (
+    SmartArray, SmartList, SmartArrayNumber, SmartListNumber
 )
 
 try:

@@ -4,13 +4,12 @@ if not TEST:
 else:
     from dummy_classes import dummy_serial as serial
 from time import sleep, time
-from typing import Optional, TypeVar, Literal, Any
+from typing import Optional, TypeVar, Literal, Any, Callable
 import sys
 import glob
 import json
 from logging_helper import logger as lh
-import numpy as np
-from type_hints import *
+from smart_arrays import SmartArrayFloat
 
 
 def get_devices() -> list[str]:
@@ -41,8 +40,9 @@ def get_devices() -> list[str]:
             pass
     return result
 
+
 T = TypeVar('T')
-def try_cast_omit_none(v: Any, t: T) -> Optional[T]:
+def try_cast_omit_none(v: Any, t: type[T]) -> Optional[T]:
     if v is None:
         return None
     try:
@@ -176,7 +176,7 @@ class SerialManager(SerialManagerGeneric):
             lh.debug('Arduino: OK command successful')
         return res
 
-    def cmd_hx(self, n: int=20) -> Optional[np_arr_float_1D]:
+    def cmd_hx(self, n: int=20) -> Optional[SmartArrayFloat]:
         '''
             n son la cantidad de veces que se samplean las balanzas para obtener el promedio
         '''
@@ -185,10 +185,10 @@ class SerialManager(SerialManagerGeneric):
         if n < 0:
             raise ValueError()
         res = self._send_command_wait_response_retries(f'hx {n}')
-        if res:
+        if res is not None:
             try:
                 res = json.loads(res)
-                res = np.array(res, dtype=np_float)
+                res = SmartArrayFloat(res)
             except:
                 res = None
         if res is None:
@@ -228,10 +228,11 @@ class SerialManager(SerialManagerGeneric):
             if res is None:
                 lh.warning('Arduino: Failed hx_n command')
                 return None
-            self._hx_n_init_time_s = time()
-            self._last_hx_n = res
-            lh.debug(f'Arduino: Succeeded hx_n command with {res}')
-            return res
+            else:
+                self._hx_n_init_time_s = time()
+                self._last_hx_n = res
+                lh.debug(f'Arduino: Succeeded hx_n command with {res}')
+                return res
         else:
             lh.debug(f'Arduino: Used cached hx_n value of {self._last_hx_n}')
             return self._last_hx_n
@@ -241,7 +242,7 @@ class SerialManager(SerialManagerGeneric):
         if res is None:
             lh.warning('Arduino: Failed dht command. Returned None')
             return None
-        if res:
+        if res is not None:
             try:
                 res = json.loads(res)
                 res = res['hum'], res['temp']
@@ -273,8 +274,9 @@ class SerialManager(SerialManagerGeneric):
         '''
         if not (isinstance(angulo, int) or angulo is None):
             raise TypeError()
-        if angulo < 1 or angulo > 179:
-            raise ValueError()
+        if angulo is not None:
+            if angulo < 1 or angulo > 179:
+                raise ValueError()
         cmd = 'servo' if angulo is None else f'servo {angulo}'
         res = self._send_command_wait_response_retries(cmd)
         res = try_cast_omit_none(res, int)

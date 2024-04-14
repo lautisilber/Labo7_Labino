@@ -3,6 +3,7 @@ import logging.handlers
 from collections.abc import Iterable
 from typing import Union
 import os
+from config import TEST
 
 # change working directory to here
 abspath = os.path.abspath(__file__)
@@ -51,7 +52,10 @@ logger.addHandler(rotating_handler_error)
 
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter_print)
-stream_handler.addFilter(LoggingLevelFilter((logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL)))
+if not TEST:
+    stream_handler.addFilter(LoggingLevelFilter((logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL)))
+else:
+    stream_handler.addFilter(LoggingLevelFilter((logging.WARNING, logging.ERROR, logging.CRITICAL)))
 logger.addHandler(stream_handler)
 
 def debug(msg: str, *args) -> None:
@@ -72,8 +76,8 @@ def critical(msg: str, *args) -> None:
 def exception(msg: str, *args) -> None:
     logger.exception(msg, *args)
 
-def log(msg: str, *args) -> None:
-    logger.log(msg, *args)
+def log(level: int, msg: str, *args) -> None:
+    logger.log(level, msg, *args)
 
 import sys
 from typing import Type, Optional

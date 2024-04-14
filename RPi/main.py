@@ -1,5 +1,6 @@
-from systems import System, Position, IntensityConfig, SerialManagerInfo, BalanzasInfo, WateringScheme, WateringSchemeStep, CameraControllerInfo
+from systems import System, Position, IntensityConfig, SerialManagerInfo, BalanzasInfo, WateringSchedule, WateringScheduleStep, CameraControllerInfo
 from systems_manager import SystemsManager
+from datetime import timedelta
 from typing import Optional
 
 # change working directory to here
@@ -59,7 +60,7 @@ def main() -> None:
             n_statistics=50,
             n_arduino=10
         ),
-        watering_schemes=tuple([WateringScheme((WateringSchemeStep(670, 0), WateringSchemeStep(610, 0), WateringSchemeStep(670, 0)), cyclic=False)]*6),
+        watering_schedules=tuple([WateringSchedule((WateringScheduleStep(670), WateringScheduleStep(610), WateringScheduleStep(670)), cyclic=False)]*6),
         cc_info=CameraControllerInfo(),
         n_balanzas=6,
         name='system_1',

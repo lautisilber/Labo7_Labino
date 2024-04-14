@@ -1,5 +1,5 @@
-from gpiozero import DigitalInputDevice as InPin
-from gpiozero import PWMLED as Led
+from gpiozero import DigitalInputDevice as InPin # type: ignore
+from gpiozero import PWMLED as Led # type: ignore
 from typing import Callable
 from logging_helper import logger as lh
 from enum import Enum, auto

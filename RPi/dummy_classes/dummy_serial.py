@@ -1,4 +1,5 @@
 from typing import Optional, Literal
+from random import gauss
 
 n_balanzas = 6
 
@@ -6,6 +7,9 @@ EIGHTBITS = 8
 STOPBITS_ONE = 1
 
 class PortNotOpenError(Exception):
+    pass
+
+class SerialException(Exception):
     pass
 
 class Serial:
@@ -17,6 +21,7 @@ class Serial:
         bytesize: Optional[int]=None,
         parity: Optional[Literal['N', 'E', 'O']]=None,
         stopbits: Optional[int]=None) -> None:
+
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
@@ -25,9 +30,54 @@ class Serial:
         self.parity = parity
         self.stopbits = stopbits
 
+        self._n_balanzas: int = 6
+        self._hx_readings: list[float] = [660, 661, 662, 663, 664, 665]
+        self._hx_variability_sigma: float = 1.0
+
         self._is_open: bool = False
         # self._out_buffer: bytearray = bytearray()
         self._in_buffer: bytearray = bytearray()
+
+    @property
+    def n_balanzas(self) -> int:
+        return self._n_balanzas
+    
+    @n_balanzas.setter
+    def n_balanzas(self, value: int) -> None:
+        self._n_balanzas = int(value)
+
+    @property
+    def hx_readings(self) -> list[float]:
+        return self._hx_readings
+    
+    @hx_readings.setter
+    def hx_readings(self, value: list[float]) -> None:
+        if len(value) != self.n_balanzas:
+            raise ValueError('Wrong length')
+        if not all(isinstance(e, (float, int, bool)) for e in value):
+            raise TypeError('Not all elements are numbers')
+        self._hx_readings = [float(e) for e in value]
+
+    def hx_reading_change_single(self, value: float, index: int) -> None:
+        if index < 0 or index >= self.n_balanzas:
+            raise ValueError('Index is wrong')
+        self.hx_readings[index] = value
+
+    @property
+    def hx_variability_sigma(self) -> float:
+        return self._hx_variability_sigma
+    
+    @hx_variability_sigma.setter
+    def hx_variability_sigma(self, value: float) -> None:
+        self._hx_variability_sigma = float(value)
+
+    def _get_hx_reading(self, index: Optional[int]=None) -> str:
+        r = [gauss(e, self.hx_variability_sigma) for e in self.hx_readings]
+        if index is None:
+            return str(r)
+        if index >= self.n_balanzas:
+            raise ValueError()
+        return str(r[index])
 
     def close(self) -> None:
         self._is_open = False
@@ -63,7 +113,7 @@ class Serial:
                     err = not (1 <= int(args[0]) <= 255)
             if not err:
                 self._add_to_in_buffer('rcv')
-                self._add_to_in_buffer('[1.2,3.4,5.6,7.8,9.1,2.3]')
+                self._add_to_in_buffer(self._get_hx_reading())
             else:
                 self._add_to_in_buffer('ERROR: hx error')
         elif cmd == 'hx_single':
@@ -77,7 +127,7 @@ class Serial:
                     err = not (1 <= int(args[1]) <= 255)
             if not err:
                 self._add_to_in_buffer('rcv')
-                self._add_to_in_buffer('[1.2,3.4,5.6,7.8,9.1,2.3]')
+                self._add_to_in_buffer(self._get_hx_reading(int(args[0])))
             else:
                 self._add_to_in_buffer('ERROR: hx_single error')
         elif cmd == 'hx_n':

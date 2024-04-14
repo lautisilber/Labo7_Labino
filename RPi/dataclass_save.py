@@ -2,8 +2,15 @@ import os
 import json
 import dataclasses
 from typing import Optional, get_origin, Any, TypeVar, Type
+from typing import ClassVar, Dict, Protocol, Any
 
-T = TypeVar('T')
+
+class IsDataclass(Protocol):
+    # as already noted in comments, checking for this attribute is currently
+    # the most reliable way to ascertain that something is a dataclass
+    __dataclass_fields__: ClassVar[Dict[str, Any]] 
+
+T = TypeVar('T', bound=IsDataclass)
 
 def _populate_dataclass_from_dict(cls: Type[T], example: T, obj: dict) -> T:
     field_types = {f.name: f.type for f in dataclasses.fields(cls)}
@@ -55,32 +62,32 @@ def load_dataclass_json(defaults: T, save_file: Optional[str]=None) -> T:
         raise TypeError('cls is not a dataclass')
     if save_file is None:
         if hasattr(defaults, '_save_file'):
-            save_file = defaults._save_file
+            save_file = defaults._save_file # type: ignore
         else:
             raise ValueError(f'defaults._save_file and save_file arguments are both None. Cannot load {cls}')
-    file_exists = os.path.isfile(save_file)
+    file_exists = os.path.isfile(save_file) # type: ignore
     if not file_exists:
         return dataclasses.replace(defaults)
     else:
-        with open(save_file, 'r') as f:
+        with open(save_file, 'r') as f: # type: ignore
             d = json.load(f)
         return _populate_dataclass_from_dict(cls, defaults, d)
 
-def save_dataclass_json(cls_instance: T, save_file: Optional[str]=None) -> bool:
+def save_dataclass_json(cls_instance: T, save_file: Optional[str]=None) -> None:
     if not dataclasses.is_dataclass(cls_instance.__class__):
         raise TypeError('cls is not a dataclass')
     if save_file is None:
         if hasattr(cls_instance, '_save_file'):
-            save_file = cls_instance._save_file
+            save_file = cls_instance._save_file # type: ignore
         else:
             Exception('Instance has no attribute \'save_file\'')
-    dirname = os.path.dirname(save_file)
+    dirname = os.path.dirname(save_file) # type: ignore
     if dirname and not os.path.isdir(dirname):
         os.makedirs(dirname)
     obj = dataclasses.asdict(cls_instance)
     if not isinstance(obj, dict):
         raise TypeError('__dict__ method should return a dict')
-    with open(save_file, 'w') as f:
+    with open(save_file, 'w') as f: # type: ignore
         json.dump(obj, f)
 
 
@@ -118,6 +125,6 @@ if __name__ == '__main__':
 
     fname = '.dataclass_save_test.json'
 
-    r = load_dataclass_json(C, c, fname)
+    r = load_dataclass_json(C, c, fname) # type: ignore
     print(r)
     save_dataclass_json(r, fname)
