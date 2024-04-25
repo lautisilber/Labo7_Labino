@@ -99,7 +99,7 @@ class Serial:
         self._in_buffer.extend(s.encode('ascii'))
 
     def write(self, msg: bytes) -> None:
-        if not isinstance(msg, bytes):
+        if not isinstance(msg, bytes): # type: ignore
             raise TypeError()
         # self._in_buffer.extend(msg)
         s = msg.decode('ascii')
@@ -211,7 +211,7 @@ class Serial:
             byte = self.read()
             if byte != expected:
                 r.extend(byte)
-        return r
+        return bytes(r)
 
     def reset_input_buffer(self) -> None:
         self._in_buffer = bytearray()
