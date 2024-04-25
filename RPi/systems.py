@@ -10,15 +10,16 @@ from smart_arrays.utils import loadtxt as smart_loadtxt
 from smart_arrays.utils import savetxt as smart_savetxt
 from smart_arrays import stats
 
-import utils
 
 import os
 import dataclasses
 from collections import deque
 from datetime import datetime, timedelta
-import json, pickle
-from typing import Callable, Literal, Optional, Union
+import json
+import pickle
+from typing import Any, Literal, Optional, Union
 from time import sleep
+
 
 @dataclasses.dataclass(frozen=True)
 class IntensityConfig:
@@ -40,13 +41,16 @@ class IntensityConfig:
             raise ValueError()
 
     def __call__(self, arg: int) -> int:
-        if arg < self.n_steps_not_incrementing: return self.initial_value
-        elif arg >= self.n_steps: return self.final_value
+        if arg < self.n_steps_not_incrementing:
+            return self.initial_value
+        elif arg >= self.n_steps:
+            return self.final_value
 
         x_range = self.n_steps - self.n_steps_not_incrementing
         y_range = self.final_value - self.initial_value
         norm_arg = (arg - self.n_steps_not_incrementing) / x_range
         return int(norm_arg * y_range + self.initial_value)
+
 
 @dataclasses.dataclass(frozen=True)
 class Position:
@@ -57,11 +61,13 @@ class Position:
     water_pwm_curve: IntensityConfig
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Position): raise TypeError()
+        if not isinstance(other, Position):
+            raise TypeError()
         return self.stepper == other.stepper and self.servo == other.servo
 
     def __lt__(self, other: Position) -> bool:
-        if not isinstance(other, Position): raise TypeError()
+        if not isinstance(other, Position): # type: ignore
+            raise TypeError()
         if self.stepper < other.stepper:
             return True
         elif self.servo < other.servo:
@@ -71,6 +77,7 @@ class Position:
     def __le__(self, other: Position) -> bool:
         return self.__eq__(other) or self.__lt__(other)
 
+
 @dataclasses.dataclass(frozen=True)
 class SerialManagerInfo:
     port: str = '/dev/ttyACM0'
@@ -79,17 +86,20 @@ class SerialManagerInfo:
     delay_s: float = .15
     parity: Literal['N', 'E', 'O'] = 'E'
 
+
 @dataclasses.dataclass(frozen=True)
 class BalanzasInfo:
     n_statistics: int = 50
     n_arduino: int = 10
     err_threshold: int = 500
 
+
 @dataclasses.dataclass(frozen=True)
 class CameraControllerInfo:
-    n_files: int=50
-    resolution: tuple[int, int]=(640, 480)
-    framerate: int=20
+    n_files: int = 50
+    resolution: tuple[int, int] = (640, 480)
+    framerate: int = 20
+
 
 @dataclasses.dataclass(frozen=True)
 class WateringScheduleStep:
@@ -102,9 +112,9 @@ class WateringScheduleStep:
     immediately completed after step 1)
     '''
     weight: float
-    time: timedelta=timedelta()
-    weight_threshold: float=0
-    max_weight_difference: Optional[float]=None
+    time: timedelta = timedelta()
+    weight_threshold: float = 0
+    max_weight_difference: Optional[float] = None
 
     @property
     def has_time(self) -> bool:
@@ -112,17 +122,22 @@ class WateringScheduleStep:
 
     def __post_init__(self):
         if self.weight_threshold < 0:
-            raise ValueError(f'weight_threshold should be 0 or positive. it is {self.weight_threshold}')
+            raise ValueError(f'weight_threshold should be 0 or positive. it is {
+                             self.weight_threshold}')
         if self.max_weight_difference is not None:
             if self.max_weight_difference < 0:
-                raise ValueError(f'max_weight_difference should be 0 or positive. it is {self.max_weight_difference}')
+                raise ValueError(f'max_weight_difference should be 0 or positive. it is {
+                                 self.max_weight_difference}')
             if self.weight_threshold - 1 >= self.max_weight_difference:
-                raise ValueError('weight_threshold (- 1 for errors) cannot be greater than max_weight_difference, otherwise goal will never be reached')
-        if not isinstance(self.time, timedelta):
-            raise TypeError(f'time shoud be a timedelta. Instead it is {type(self.time)}')
+                raise ValueError(
+                    'weight_threshold (- 1 for errors) cannot be greater than max_weight_difference, otherwise goal will never be reached')
+        if not isinstance(self.time, timedelta):  # type: ignore
+            raise TypeError(f'time shoud be a timedelta. Instead it is {
+                            type(self.time)}')
+
 
 class WateringSchedule:
-    def __init__(self, steps: tuple[WateringScheduleStep,...], cyclic: bool) -> None:
+    def __init__(self, steps: tuple[WateringScheduleStep, ...], cyclic: bool) -> None:
         self.steps = steps
         self.cyclic = cyclic
         self.n_steps = len(self.steps)
@@ -131,7 +146,8 @@ class WateringSchedule:
         # if _got_to_weight_goal is false, the balanza has not yet reached the weight goal for this step.
         # if true, the goal for this step has been reached and we are waiting on the time corresponding to this step.
         self._got_to_weight_goal: bool = False
-        self._last_steps_weight: Optional[float] = None # guarda el peso obtenido cuando se completo el anterior paso
+        # guarda el peso obtenido cuando se completo el anterior paso
+        self._last_steps_weight: Optional[float] = None
         # if self.cyclic is True, this variable tracks the number of complete cycles taken. If False, it is set to 1 once
         # the schedule has reached its final step's goal
         self.n_cycles: int = 0
@@ -140,25 +156,26 @@ class WateringSchedule:
     def current_step(self) -> int:
         return self._current_step
 
-    def _in_goal(self, curr_weight: float) -> bool:
+    def in_goal(self, curr_weight: float) -> bool:
         '''check if curr_weight is in goal for this step (!= should water)'''
         step = self.steps[self._current_step]
         if step.max_weight_difference is not None:
             return step.weight - step.max_weight_difference <= curr_weight <= step.weight + step.max_weight_difference
         else:
             # como no hay un max_weight_difference, se estara en un goal dependiendo de si el paso anterior tenia un peso objetivo mayor o menor a este
-            if self._last_steps_weight is None: return False # si no tenemos peso anterior, no podemos hacer nada porque estamos en el primer tick. Esperar hasta que haya un historial
-            if (not self.cyclic and self.n_cycles >= 1): # if reached last step and not cyclic
+            if self._last_steps_weight is None:
+                return False  # si no tenemos peso anterior, no podemos hacer nada porque estamos en el primer tick. Esperar hasta que haya un historial
+            if (not self.cyclic and self.n_cycles >= 1):  # if reached last step and not cyclic
                 # en este caso siempre hay que entender que el objetivo se llega si el peso es mayor al objetivo, dado que queremos mantener la
                 # maceta en este peso. Esto debe ser asi porque no ocurre el unico ccaso en que chequeamos que el peso sea menor, que ocurre cuando
                 # partimos de un peso mayor y debemos esperar hasta que se seque.
-                return curr_weight >= step.weight - step.weight_threshold 
+                return curr_weight >= step.weight - step.weight_threshold
             elif step.weight > self._last_steps_weight:
                 return curr_weight >= step.weight - step.weight_threshold
             elif step.weight < self._last_steps_weight:
                 return curr_weight <= step.weight - step.weight_threshold
             return True
-        
+
     def _next_step(self, curr_weight: float) -> None:
         self._current_step += 1
         if self._current_step >= self.n_steps:
@@ -170,9 +187,10 @@ class WateringSchedule:
                 self.n_cycles = 1
         self._got_to_weight_goal = False
         self._last_steps_weight = curr_weight
-    
+
     def should_water(self, curr_weight: float) -> bool:
-        if self._in_goal(curr_weight): return False
+        if self.in_goal(curr_weight):
+            return False
         step = self.steps[self._current_step]
         if step.weight > curr_weight:
             return True
@@ -193,7 +211,7 @@ class WateringSchedule:
         '''
         step = self.steps[self._current_step]
         if not self._got_to_weight_goal:
-            if self._in_goal(curr_weight):
+            if self.in_goal(curr_weight):
                 self._got_to_weight_goal = True
                 self._last_step_init_time = datetime.now()
                 self.update(curr_weight)
@@ -251,11 +269,14 @@ class System:
           amount
     '''
     names: list[str] = list()
-    def __init__(self, positions: tuple[Position,...], sm_info: SerialManagerInfo, balanzas_info: BalanzasInfo, watering_schedules: tuple[WateringSchedule,...],
-                 cc_info: Optional[CameraControllerInfo], n_balanzas: int, name: str, save_dir: str, history_length: int=30, watering_min_diff_grams: float=1,
-                 watering_max_diff_grams: float=4, watering_max_unchanged_times: int=2, watering_intensity_lowering_rate: int=2,
-                 use_tqdm: bool=True) -> None:
-        if name in System.names: raise ValueError(f'The name "{name}" as already been used. Choose a different one')
+
+    def __init__(self, positions: tuple[Position, ...], sm_info: SerialManagerInfo, balanzas_info: BalanzasInfo, watering_schedules: tuple[WateringSchedule, ...],
+                 cc_info: Optional[CameraControllerInfo], n_balanzas: int, name: str, save_dir: str, history_length: int = 30, watering_min_diff_grams: float = 1,
+                 watering_max_diff_grams: float = 4, watering_max_unchanged_times: int = 2, watering_intensity_lowering_rate: int = 2,
+                 use_tqdm: bool = True) -> None:
+        if name in System.names:
+            raise ValueError(
+                f'The name "{name}" as already been used. Choose a different one')
         self.n_balanzas = n_balanzas
         self.save_dir = save_dir
         self.name = name
@@ -263,8 +284,12 @@ class System:
         # visual
         self.use_tqdm = use_tqdm
 
-        if not len(positions) == self.n_balanzas: raise ValueError(f'System {self.name}: n_balanzas != len(positions)')
-        if not len(watering_schedules) == self.n_balanzas: raise ValueError(f'System {self.name}: n_balanzas != len(watering_schedules)')
+        if not len(positions) == self.n_balanzas:
+            raise ValueError(
+                f'System {self.name}: n_balanzas != len(positions)')
+        if not len(watering_schedules) == self.n_balanzas:
+            raise ValueError(
+                f'System {self.name}: n_balanzas != len(watering_schedules)')
         self.positions = positions
         self.serial_manager = SerialManager(
             port=sm_info.port,
@@ -279,12 +304,14 @@ class System:
             n_statistics=balanzas_info.n_statistics,
             n_arduino=balanzas_info.n_arduino,
             err_threshold=balanzas_info.err_threshold,
-            save_file=os.path.join(self.save_dir, 'config', f'balanzas_{self.name}.json'),
+            save_file=os.path.join(
+                self.save_dir, 'config', f'balanzas_{self.name}.json'),
             use_tqdm=self.use_tqdm
         )
         self.file_manager = FileManager(
             n_balanzas=self.n_balanzas,
-            save_file=os.path.join(self.save_dir, 'data', f'data_{self.name}.csv')
+            save_file=os.path.join(self.save_dir, 'data',
+                                   f'data_{self.name}.csv')
         )
         self.watering_schedules = watering_schedules
         self.camera_controller = None if cc_info is None else CameraController(
@@ -303,7 +330,8 @@ class System:
         self.intensities_unchanged_times = SmartArrayInt.zeros(self.n_balanzas)
 
         if watering_min_diff_grams >= watering_max_diff_grams:
-            raise ValueError(f'System {self.name}. watering_min_diff_grams has to be lower than watering_max_diff_grams. ({watering_min_diff_grams}, {watering_max_diff_grams})')
+            raise ValueError(f'System {self.name}. watering_min_diff_grams has to be lower than watering_max_diff_grams. ({
+                             watering_min_diff_grams}, {watering_max_diff_grams})')
         self.watering_min_diff_grams = watering_min_diff_grams
         self.watering_max_diff_grams = watering_max_diff_grams
         self.watering_max_unchanged_times = watering_max_unchanged_times
@@ -312,28 +340,38 @@ class System:
         self.inhabilitated_balanzas = SmartArrayBool.zeros(self.n_balanzas)
 
         self.history_length = history_length
-        self.history_weights: tuple[deque[float],...] = tuple(deque(maxlen=self.history_length) for _ in range(self.n_balanzas))
-        self.history_watering: tuple[deque[bool],...] = tuple(deque(maxlen=self.history_length) for _ in range(self.n_balanzas))
-        self.history_intensities: tuple[deque[int],...] = tuple(deque(maxlen=self.history_length) for _ in range(self.n_balanzas))
-        self.history_datetimes: deque[datetime] = deque(maxlen=self.history_length)
-        self.history_failed_checks: tuple[deque[bool],...] = tuple(deque(maxlen=self.history_length) for _ in range(self.n_balanzas))
-        self.history_inhabilitated_balanzas: deque[SmartArrayBool] = deque(maxlen=self.history_length)
+        self.history_weights: tuple[deque[float], ...] = tuple(
+            deque(maxlen=self.history_length) for _ in range(self.n_balanzas))
+        self.history_watering: tuple[deque[bool], ...] = tuple(
+            deque(maxlen=self.history_length) for _ in range(self.n_balanzas))
+        self.history_intensities: tuple[deque[int], ...] = tuple(
+            deque(maxlen=self.history_length) for _ in range(self.n_balanzas))
+        self.history_datetimes: deque[datetime] = deque(
+            maxlen=self.history_length)
+        self.history_failed_checks: tuple[deque[bool], ...] = tuple(
+            deque(maxlen=self.history_length) for _ in range(self.n_balanzas))
+        self.history_inhabilitated_balanzas: deque[SmartArrayBool] = deque(
+            maxlen=self.history_length)
 
     @property
     def save_file_stepper(self) -> str:
         return os.path.join(self.save_dir, 'config', f'stepper_{self.name}.json')
+
     @property
     def save_file_history(self) -> str:
         return os.path.join(self.save_dir, 'config', f'history_{self.name}.pkl')
+
     @property
     def save_file_inhabilitated(self) -> str:
         return os.path.join(self.save_dir, 'config', f'inhabilitated_{self.name}.txt')
+
     @property
     def save_file_intensities(self) -> str:
         return os.path.join(self.save_dir, 'config', f'intensities_{self.name}.txt')
 
-    def _create_save_dir(self, dirname: Optional[str]=None) -> None:
-        if dirname is None: dirname = self.save_dir
+    def _create_save_dir(self, dirname: Optional[str] = None) -> None:
+        if dirname is None:
+            dirname = self.save_dir
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
@@ -343,6 +381,7 @@ class System:
         obj = {'stepper': self.stepper_pos}
         with open(fname, 'w') as f:
             json.dump(obj, f)
+
     def load_stepper(self) -> bool:
         fname = self.save_file_stepper
         if not os.path.isfile(fname):
@@ -350,9 +389,11 @@ class System:
         with open(fname, 'r') as f:
             obj = json.load(f)
         if not 'stepper' in obj:
-            raise IndexError(f'System {self.name}: Stepper save has no stepper key')
+            raise IndexError(
+                f'System {self.name}: Stepper save has no stepper key')
         if not isinstance(obj['stepper'], int):
-            raise ValueError(f'System {self.name}: Stepper save stepper key is not an int')
+            raise ValueError(
+                f'System {self.name}: Stepper save stepper key is not an int')
         self.stepper_pos = obj['stepper']
         return True
 
@@ -369,12 +410,21 @@ class System:
         )
         with open(fname, 'wb') as f:
             pickle.dump(objs, f)
-    def load_history(self) -> tuple[bool,...]:
+
+    def load_history(self) -> tuple[bool, ...]:
         s = SmartArrayBool.zeros(self.n_balanzas)
         fname = self.save_file_history
-        if not os.path.isdir(fname): return tuple(s)
+        if not os.path.isdir(fname):
+            return tuple(s)
         with open(fname, 'rb') as f:
-            objs = pickle.load(f)
+            objs: Union[tuple[
+                Union[tuple[deque[float], ...], Any], # history weights
+                Union[tuple[deque[bool], ...], Any], # history watering
+                Union[tuple[deque[int], ...], Any], # history intensities
+                Union[deque[datetime], Any], # history datetimes
+                Union[tuple[deque[bool], ...], Any], # history failed checks
+                Union[deque[SmartArrayBool], Any] # history inhabilitated balanzas
+            ], Any] = pickle.load(f)
         if not isinstance(objs, tuple):
             lh.warning(f'System {self.name}: Bad histories pickle')
             return tuple(s)
@@ -387,18 +437,20 @@ class System:
             if not all(all(isinstance(de, float) for de in te) for te in history_weights):
                 s[0] = True
         if s[0]:
-            history_weights = tuple(deque(e, maxlen=self.history_length) for e in history_weights)
-            self.history_weights: tuple[deque[float],...] = history_weights
+            history_weights = tuple(
+                deque(e, maxlen=self.history_length) for e in history_weights)
+            self.history_weights: tuple[deque[float], ...] = history_weights
         else:
             lh.warning(f'System {self.name}: Bad histories pickle')
         # watering
-        history_watering = objs[0]
+        history_watering = objs[1]
         if all(isinstance(e, deque) for e in history_watering):
             if not all(all(isinstance(de, float) for de in te) for te in history_watering):
                 s[1] = True
         if s[1]:
-            history_watering = tuple(deque(e, maxlen=self.history_length) for e in history_watering)
-            self.history_watering: tuple[deque[bool],...] = history_watering
+            history_watering = tuple(
+                deque(e, maxlen=self.history_length) for e in history_watering)
+            self.history_watering: tuple[deque[bool], ...] = history_watering
         else:
             lh.warning(f'System {self.name}: Bad histories pickle')
         # intensities
@@ -407,17 +459,19 @@ class System:
             if all(all(isinstance(de, int) for de in te) for te in history_intensities):
                 s[2] = True
         if s[2]:
-            history_intensities = tuple(deque(e, maxlen=self.history_length) for e in history_intensities)
-            self.history_intensities: tuple[deque[int],...] = history_intensities
+            history_intensities = tuple(
+                deque(e, maxlen=self.history_length) for e in history_intensities)
+            self.history_intensities: tuple[deque[int], ...] = history_intensities
         else:
             lh.warning(f'System {self.name}: Bad histories pickle')
         # datetimes
         history_datetimes = objs[3]
         if isinstance(history_datetimes, deque):
-            if all(isinstance(e, datetime) for e in history_datetimes):
+            if all(isinstance(e, datetime) for e in history_datetimes): # type: ignore
                 s[3] = True
         if s[3]:
-            history_datetimes = deque(history_datetimes, maxlen=self.history_length)
+            history_datetimes = deque(
+                history_datetimes, maxlen=self.history_length)
             self.history_datetimes: deque[datetime] = history_datetimes
         else:
             lh.warning(f'System {self.name}: Bad histories pickle')
@@ -427,17 +481,19 @@ class System:
             if all(all(isinstance(de, bool) for de in te) for te in history_failed_checks):
                 s[4] = True
         if s[4]:
-            history_failed_checks = tuple(deque(e, maxlen=self.history_length) for e in history_failed_checks)
-            self.history_failed_checks: tuple[deque[bool],...] = history_failed_checks
+            history_failed_checks = tuple(
+                deque(e, maxlen=self.history_length) for e in history_failed_checks)
+            self.history_failed_checks: tuple[deque[bool], ...] = history_failed_checks
         else:
             lh.warning(f'System {self.name}: Bad histories pickle')
         # inhabilitated_balanzas
         history_inhabilitated_balanzas = objs[5]
         if isinstance(history_inhabilitated_balanzas, deque):
-            if all(isinstance(e, SmartArrayBool) for e in history_inhabilitated_balanzas):
+            if all(isinstance(e, SmartArrayBool) for e in history_inhabilitated_balanzas): # type: ignore
                 s[5] = True
         if s[5]:
-            history_inhabilitated_balanzas = deque(history_inhabilitated_balanzas, maxlen=self.history_length)
+            history_inhabilitated_balanzas = deque(
+                history_inhabilitated_balanzas, maxlen=self.history_length)
             self.history_inhabilitated_balanzas: deque[SmartArrayBool] = history_inhabilitated_balanzas
         else:
             lh.warning(f'System {self.name}: Bad histories pickle')
@@ -448,6 +504,7 @@ class System:
         fname = self.save_file_inhabilitated
         self._create_save_dir(os.path.dirname(fname))
         smart_savetxt(self.inhabilitated_balanzas, fname)
+
     def load_inhabilitated_balanzas(self) -> bool:
         fname = self.save_file_inhabilitated
         if not os.path.isfile(fname):
@@ -455,11 +512,14 @@ class System:
         try:
             inhabilitated_balanzas = smart_loadtxt(fname)
         except:
-            raise ValueError(f'System {self.name}: loaded bad inhabilitated_balanzas. Bad file')
+            raise ValueError(
+                f'System {self.name}: loaded bad inhabilitated_balanzas. Bad file')
         if not isinstance(inhabilitated_balanzas, SmartArrayBool):
-            raise ValueError(f'System {self.name}: loaded bad inhabilitated_balanzas. Bas typing')
+            raise ValueError(
+                f'System {self.name}: loaded bad inhabilitated_balanzas. Bas typing')
         if len(inhabilitated_balanzas) != self.n_balanzas:
-            raise ValueError(f'System {self.name}: loaded bad inhabilitated_balanzas. Bad size')
+            raise ValueError(
+                f'System {self.name}: loaded bad inhabilitated_balanzas. Bad size')
         self.inhabilitated_balanzas = inhabilitated_balanzas
         return True
 
@@ -467,6 +527,7 @@ class System:
         fname = self.save_file_intensities
         self._create_save_dir(os.path.dirname(fname))
         smart_savetxt(self.intensities, fname)
+
     def load_intensities(self) -> bool:
         fname = self.save_file_intensities
         if not os.path.isfile(fname):
@@ -474,11 +535,14 @@ class System:
         try:
             intensities = smart_loadtxt(fname)
         except:
-            raise ValueError(f'System {self.name}: loaded bad intensities. Bad file')
+            raise ValueError(
+                f'System {self.name}: loaded bad intensities. Bad file')
         if not isinstance(intensities, SmartArrayInt):
-            raise ValueError(f'System {self.name}: loaded bad intensities. Bas typing')
+            raise ValueError(
+                f'System {self.name}: loaded bad intensities. Bas typing')
         if len(intensities) != self.n_balanzas:
-            raise ValueError(f'System {self.name}: loaded bad intensities. Bas size')
+            raise ValueError(
+                f'System {self.name}: loaded bad intensities. Bas size')
         self.intensities = intensities
         return True
 
@@ -504,11 +568,12 @@ class System:
         if not self.n_balanzas == n_balanzas:
             raise ValueError(f'System {self.name}: La cantidad de balanzas reportada y la esperada no son iguales')
 
-    def _move_stepper_safe(self, next_pos: Union[Position, int], detach: bool=True) -> bool:
+    def _move_stepper_safe(self, next_pos: Union[Position, int], detach: bool = True) -> bool:
         if isinstance(next_pos, Position):
             next_pos = next_pos.stepper
-        elif not isinstance(next_pos, int):
-            raise TypeError(f'System {self.name}: next_pos is not of type Position or int. It is of type {type(next_pos)}')
+        elif not isinstance(next_pos, int): # type: ignore
+            raise TypeError(f'System {
+                            self.name}: next_pos is not of type Position or int. It is of type {type(next_pos)}')
         # save starting position
         start_pos = self.stepper_pos
         # if final position is same as starting, do nothing
@@ -524,7 +589,8 @@ class System:
         if not res:
             self.stepper_pos = start_pos
             self.save_stepper()
-            lh.critical('Stepper command failed. Presuming the stepper never moved')
+            lh.critical(
+                'Stepper command failed. Presuming the stepper never moved')
             return False
         return True
 
@@ -543,7 +609,7 @@ class System:
 
         self.serial_manager.cmd_servo_attach(False)
 
-    def show_all_positions(self, wait_for_user_input: bool=False) -> None:
+    def show_all_positions(self, wait_for_user_input: bool = False) -> None:
         for i, position in enumerate(self.positions):
             self.serial_manager.cmd_servo(90)
             self._move_stepper_safe(position)
@@ -562,20 +628,21 @@ class System:
         self._move_stepper_safe(0)
         self.serial_manager.cmd_servo_attach(False)
 
-    def calibrate_system(self, n: int=200) -> None:
+    def calibrate_system(self, n: int = 200) -> None:
         self.serial_manager.cmd_stepper_attach(False)
         self.serial_manager.cmd_servo_attach(False)
         balanzas_calibrate(
             balanzas=self.balanzas,
             n_balanzas=self.n_balanzas,
             n=n,
-            offset_temp_file=os.path.join(self.save_dir, 'config', f'.tmp_balanzas_offset_{self.name}.json')
+            offset_temp_file=os.path.join(
+                self.save_dir, 'config', f'.tmp_balanzas_offset_{self.name}.json')
         )
 
-    def show_system_weights(self, n: Optional[int]=None) -> None:
+    def show_system_weights(self, n: Optional[int] = None) -> None:
         print(self.balanzas.read_stats(n))
 
-    def water_test(self, balanza_index: int, intensity: int=0) -> None:
+    def water_test(self, balanza_index: int, intensity: int = 0) -> None:
         if balanza_index < 0 or balanza_index >= self.n_balanzas:
             raise IndexError()
         if self.camera_controller is not None:
@@ -590,11 +657,13 @@ class System:
 
     def _check_all_right(self, balanza_index: int) -> bool:
         if balanza_index < 0 or balanza_index >= self.n_balanzas:
-            raise IndexError(f'System {self.name}: balanza_index is {balanza_index} and should be >= 0 and < {self.n_balanzas}')
-        history_weight = SmartArrayFloat(self.history_weights[balanza_index]) # uso mi libraria para poder indexar mas facilmente
+            raise IndexError(f'System {self.name}: balanza_index is {
+                             balanza_index} and should be >= 0 and < {self.n_balanzas}')
+        # uso mi libraria para poder indexar mas facilmente
+        history_weight = SmartArrayFloat(self.history_weights[balanza_index])
         history_watering = SmartArrayBool(self.history_watering[balanza_index])
         history_intensities = SmartArrayInt(self.history_intensities[balanza_index])
-        history_datetimes = SmartArray[datetime](self.history_datetimes, dtype=datetime)
+        history_datetimes = SmartArray[datetime](self.history_datetimes, dtype=datetime) # type: ignore
         history_failed_checks = SmartArrayBool(self.history_failed_checks[balanza_index])
 
         # si el valor es negativo!
@@ -620,15 +689,17 @@ class System:
                     zip(history_watering[:recent_history], history_intensities[:recent_history], history_failed_checks[:recent_history]))):
                 lh.critical((f'check before watering: sistema {self.name}, balanza {balanza_index} '
                             '-> No paso el chequeo para regar. Esta regando demasiado intenso demasiadas '
-                            f'veces (history_watering={history_watering}, history_intensities={history_intensities}, '
-                            f'history_weight={history_weight})'))
+                             f'veces (history_watering={history_watering}, history_intensities={
+                    history_intensities}, '
+                    f'history_weight={history_weight})'))
                 return False
 
         # si vienen muchos valores negativos -> INHABILITAR
         if sum(w < 0 for w in history_weight) > 5:
             lh.critical((f'check before watering: sistema {self.name}, balanza {balanza_index} '
-                        f'-> No paso el chequeo para regar. tuvo mas de 5 pesos negativos ({history_weight}). '
-                        'Inhabilitando balanza hasta intervencion manual'))
+                        f'-> No paso el chequeo para regar. tuvo mas de 5 pesos negativos ({
+                history_weight}). '
+                'Inhabilitando balanza hasta intervencion manual'))
             self.inhabilitated_balanzas[balanza_index] = True
             return False
 
@@ -650,9 +721,11 @@ class System:
         low_diff = diff < self.watering_min_diff_grams
         big_diff = diff > self.watering_max_diff_grams
         for i in range(self.n_balanzas):
-            if not watered_last_tick[i]: continue
+            if not watered_last_tick[i]:
+                continue
             if low_diff[i] and big_diff[i]:
-                lh.warning(f'System {self.name}. The weight difference was detected to be low and big at the same time. ({curr_weights}, {self.last_weights}, {watered_last_tick})')
+                lh.warning(f'System {self.name}. The weight difference was detected to be low and big at the same time. ({
+                           curr_weights}, {self.last_weights}, {watered_last_tick})')
             if low_diff[i]:
                 # if it was supposed to be watered but the differece in weight was low
                 if self.intensities_unchanged_times[i] >= self.watering_max_unchanged_times:
@@ -662,7 +735,8 @@ class System:
                     self.intensities_unchanged_times[i] += 1
             elif big_diff[i]:
                 # too much water was poured
-                self.intensities[i] = max(self.intensities[i] - self.watering_intensity_lowering_rate, 0)
+                self.intensities[i] = max(
+                    self.intensities[i] - self.watering_intensity_lowering_rate, 0)
                 self.intensities_unchanged_times[i] = 0
         self.last_weights = curr_weights
 
@@ -673,12 +747,12 @@ class System:
             res = self.balanzas.read_stats()
             if res is None:
                 sleep(1)
-                lh.warning(f'Sistema {self.name}: No se pudo leer las balanzas. Volviendo a intentar...')
-        values, n_filtered, n_unsuccessful = res
-        means = values.values()
-        stdevs = values.errors()
+                lh.warning(
+                    f'Sistema {self.name}: No se pudo leer las balanzas. Volviendo a intentar...')
+        means, stdevs, n_filtered, n_unsuccessful = res
         if not (len(means) == len(stdevs) == self.n_balanzas):
-            lh.warning(f'Sistema {self.name}: Al leer se obtuvo una lista de largo {len(means)}, {len(stdevs)} cuando hay {self.n_balanzas} balanzas')
+            lh.warning(f'Sistema {self.name}: Al leer se obtuvo una lista de largo {
+                len(means)}, {len(stdevs)} cuando hay {self.n_balanzas} balanzas')
 
         # actualizar watering_schedules, chequear que macetas hay que regar y obtener los objetivos actuales de peso
         for i in range(self.n_balanzas):
@@ -686,7 +760,8 @@ class System:
         macetas_to_water = SmartArrayBool(
             ws.should_water(w) for w, ws in zip(means, self.watering_schedules)
         )
-        grams_goals = SmartArrayFloat(self.watering_schedules[i].current_goal for i in range(self.n_balanzas))
+        grams_goals = SmartArrayFloat(
+            self.watering_schedules[i].current_goal for i in range(self.n_balanzas))
 
         # agregar datos de mediciones para chequear que todo esta en orden
         all_right = SmartArrayBool.zeros(self.n_balanzas)
@@ -697,24 +772,30 @@ class System:
             self.history_intensities[i].append(self.intensities[i])
             all_right[i] = self._check_all_right(i)
             self.history_failed_checks[i].append(all_right[i])
-        lh.debug(f'Datos de mediciones - sistema {self.name}: pesos=({means}+/-{stdevs}), a_regar={macetas_to_water}, intensidades={self.intensities}')
+        lh.debug(f'Datos de mediciones - sistema {self.name}: pesos=({means}+/-{
+                 stdevs}), a_regar={macetas_to_water}, intensidades={self.intensities}')
 
         # regar
-        any_watering = any(macetas_to_water) and any(all_right) and not all(self.inhabilitated_balanzas)
+        any_watering = any(macetas_to_water) and any(
+            all_right) and not all(self.inhabilitated_balanzas)
         if any_watering:
             if self.camera_controller is not None:
                 self.camera_controller.start_recording()
 
-            positions_to_water = [p for i, p in enumerate(self.positions) if macetas_to_water[i]]
-            best_index_order = stats.get_fastest_path(SmartArrayInt(p.stepper for p in positions_to_water), starting_position=self.stepper_pos)
+            positions_to_water = [p for i, p in enumerate(
+                self.positions) if macetas_to_water[i]]
+            best_index_order = stats.get_fastest_path(SmartArrayInt(
+                p.stepper for p in positions_to_water), starting_position=self.stepper_pos)
 
             for i in best_index_order:
-                if self.inhabilitated_balanzas[i] or not all_right[i]: continue
+                if self.inhabilitated_balanzas[i] or not all_right[i]:
+                    continue
                 self.water(
                     position_index=i,
                     intensity=self.intensities[i]
                 )
-                lh.info(f'Tick: Watering {i}, starting with weight {means[i]} +/- {stdevs[i]} and a goal of {grams_goals[i]}')
+                lh.info(f'Tick: Watering {i}, starting with weight {
+                        means[i]} +/- {stdevs[i]} and a goal of {grams_goals[i]}')
 
             if self.camera_controller is not None:
                 self.camera_controller.schedule_stop_recording(5)
@@ -732,7 +813,6 @@ class System:
             means, stdevs, macetas_to_water, n_filtered, n_unsuccessful,
             grams_goals, hum, temp
         )
-
 
         # guardar last_weights y actualizar intensidades
         if self.last_weights is None:

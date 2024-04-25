@@ -12,16 +12,16 @@ class IsDataclass(Protocol):
 
 T = TypeVar('T', bound=IsDataclass)
 
-def _populate_dataclass_from_dict(cls: Type[T], example: T, obj: dict) -> T:
+def _populate_dataclass_from_dict(cls: Type[T], example: T, obj: dict[str, Any]) -> T:
     field_types = {f.name: f.type for f in dataclasses.fields(cls)}
-    new_obj = dict()
+    new_obj: dict[str, Any] = dict()
 
     for field_name, field_type in field_types.items():
         if not field_name in obj: continue
         # attr needs to be in example class as well
         if not hasattr(example, field_name):
             raise TypeError()
-        example_attr = getattr(example, field_name)
+        example_attr: Any = getattr(example, field_name)
         # check if dataclass
         if dataclasses.is_dataclass(example_attr): # or dataclasses.is_dataclass(field_type):
             new_obj[field_name] = _populate_dataclass_from_dict(example_attr.__class__, example_attr, obj[field_name])
@@ -30,18 +30,18 @@ def _populate_dataclass_from_dict(cls: Type[T], example: T, obj: dict) -> T:
             # type checks against example
             if not isinstance(example_attr, (tuple, list)):
                 raise TypeError()
-            if not len(example_attr) == len(obj[field_name]):
+            if not len(example_attr) == len(obj[field_name]): # type: ignore
                 raise IndexError()
             # populate new list
-            l = list()
-            for e, example_e in zip(obj[field_name], example_attr):
-                if dataclasses.is_dataclass(example_e):
-                    l.append(_populate_dataclass_from_dict(example_e.__class__, example_e, e))
+            l: list[Any] = list()
+            for e, example_e in zip(obj[field_name], example_attr): # type: ignore
+                if dataclasses.is_dataclass(example_e): # type: ignore
+                    l.append(_populate_dataclass_from_dict(example_e.__class__, example_e, e)) # type: ignore
                 else:
-                    l.append(type(example_e)(e))
+                    l.append(type(example_e)(e)) # type: ignore
             # tuple or list
             if field_type is tuple or get_origin(field_type) is tuple:
-                l = tuple(l)
+                l = tuple(l) # type: ignore
             # assign new list
             new_obj[field_name] = l
         else:
@@ -70,25 +70,25 @@ def load_dataclass_json(defaults: T, save_file: Optional[str]=None) -> T:
         return dataclasses.replace(defaults)
     else:
         with open(save_file, 'r') as f: # type: ignore
-            d = json.load(f)
+            d = json.load(f) # type: ignore
         return _populate_dataclass_from_dict(cls, defaults, d)
 
-def save_dataclass_json(cls_instance: T, save_file: Optional[str]=None) -> None:
+def save_dataclass_json(cls_instance: IsDataclass, save_file: Optional[str]=None) -> None:
     if not dataclasses.is_dataclass(cls_instance.__class__):
         raise TypeError('cls is not a dataclass')
     if save_file is None:
         if hasattr(cls_instance, '_save_file'):
             save_file = cls_instance._save_file # type: ignore
         else:
-            Exception('Instance has no attribute \'save_file\'')
+            raise Exception('Instance has no attribute \'save_file\'')
     dirname = os.path.dirname(save_file) # type: ignore
-    if dirname and not os.path.isdir(dirname):
-        os.makedirs(dirname)
+    if dirname and not os.path.isdir(dirname): # type: ignore
+        os.makedirs(dirname) # type: ignore
     obj = dataclasses.asdict(cls_instance)
-    if not isinstance(obj, dict):
+    if not isinstance(obj, dict): # type: ignore
         raise TypeError('__dict__ method should return a dict')
     with open(save_file, 'w') as f: # type: ignore
-        json.dump(obj, f)
+        json.dump(obj, f) # type: ignore
 
 
 
@@ -126,5 +126,5 @@ if __name__ == '__main__':
     fname = '.dataclass_save_test.json'
 
     r = load_dataclass_json(C, c, fname) # type: ignore
-    print(r)
-    save_dataclass_json(r, fname)
+    print(r) # type: ignore
+    save_dataclass_json(r, fname) # type: ignore

@@ -1,9 +1,9 @@
 from typing import Collection
 from .smart_array_base import SmartArray, SmartList
 from .smart_array import SmartArrayFloat, SmartListFloat
-from uncertainties import ufloat, umath
-from uncertainties.core import AffineScalarFunc as ufloat_type
-from typing import Optional, Union, Self, Collection, Set
+from uncertainties import ufloat, umath # type: ignore
+from uncertainties.core import AffineScalarFunc as ufloat_type # type: ignore
+from typing import Optional, Union, Self, Collection
 # from numbers import Real
 import operator as op
 
@@ -33,7 +33,7 @@ class UncertaintiesArray(SmartArray[ufloat_type]):
     
     @classmethod
     def zeros(cls, n: int) -> Self:
-        return cls.filled(n, ufloat(0.0, 0.0))
+        return cls.filled(n, ufloat(0.0, 0.0)) # type: ignore
     
     # math ops
 
@@ -123,9 +123,9 @@ class UncertaintiesArray(SmartArray[ufloat_type]):
         return self.__class__(tuple(self._binary_logic_op_right(other, op.ge))) # type: ignore
     
 
-class UncertaintiesList(UncertaintiesArray, SmartList):
-    def __init__(self, a: Union[Collection[ufloat_type], Collection[float]], b: Optional[Collection[float]] = None) -> None:
-        super(UncertaintiesArray, self).__init__(a, b)
+class UncertaintiesList(UncertaintiesArray, SmartList[ufloat_type]):
+    def __init__(self, a: Union[Collection[ufloat_type], Collection[float]], b: Optional[Collection[float]]=None) -> None:
+        super(UncertaintiesArray, self).__init__(a, b) # type: ignore
 
     def values(self) -> SmartListFloat:
         return SmartListFloat([e.nominal_value for e in self.arr])

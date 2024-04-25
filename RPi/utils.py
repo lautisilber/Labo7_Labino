@@ -1,6 +1,5 @@
 import os
-import itertools
-from typing import Any, Optional, Union, Generator, TypeVar
+from typing import Any, Optional, Generator, TypeVar
 from collections import deque
 import pickle
 
@@ -68,7 +67,9 @@ def save_pickle(obj: Any, save_file: Optional[str]=None) -> None:
             save_file = obj._save_file
             if not isinstance(save_file, str):
                 raise ValueError(f'save_file str gotten from obj._save_file is not str. it is {type(save_file)}')
-    d = os.path.dirname(save_file) # type: ignore
+    if save_file is None:
+        raise ValueError('No save file provided')
+    d: str = os.path.dirname(save_file)
     if d:
         if not os.path.isdir(d):
             os.makedirs(d)
@@ -80,7 +81,10 @@ def load_pickle(default: T, save_file: Optional[str]=None) -> T:
         if hasattr(default, '_save_file'):
             save_file = default._save_file # type: ignore
             if not isinstance(save_file, str):
-                raise ValueError(f'save_file str gotten from default._save_file is not str. it is {type(save_file)}')
+                try:
+                    raise ValueError(f'save_file str gotten from default._save_file is not str. it is {type(save_file)}') # type: ignore
+                except:
+                    raise ValueError(f'save_file str gotten from default._save_file is not str. it is {save_file}')
         else:
             raise ValueError(f'default._save_file and save_file arguments are both None. Cannot load {type(default)}')
     file_exists = os.path.isfile(save_file)

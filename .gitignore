@@ -1,5 +1,7 @@
 *.csv
 *.json
+*.log
+*.log.*
 
 # Python
 # Byte-compiled / optimized / DLL files
@@ -253,4 +255,3 @@ dkms.conf
 *.exe
 *.out
 *.app
-

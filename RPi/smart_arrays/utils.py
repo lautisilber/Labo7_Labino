@@ -1,4 +1,5 @@
 import os, json, re
+from typing import Any
 from .smart_array_base import (
     SmartArray, SmartList, SmartArrayNumber, SmartListNumber
 )
@@ -8,7 +9,7 @@ from .smart_array import (
 )
 
 try:
-    import uncertainties
+    import uncertainties # type: ignore
     from .uncertainties_array import UncertaintiesArray, UncertaintiesList
     _uncertainties_exists = True
     classes = (SmartArray, SmartList, SmartArrayNumber, SmartListNumber,
@@ -21,7 +22,7 @@ except ModuleNotFoundError:
             SmartArrayNumber, SmartArrayComplex, SmartArrayFloat, SmartArrayInt, SmartArrayBool,
             SmartListNumber, SmartListComplex, SmartListFloat, SmartListInt, SmartListBool)
 
-def _camel_to_snake(name) -> str:
+def _camel_to_snake(name: str) -> str:
     name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
 
@@ -33,7 +34,7 @@ class_name = {
     c:_camel_to_snake(c.__name__) for c in classes
 }
 
-def savetxt(arr: SmartArray, fname: str) -> None:
+def savetxt(arr: SmartArray[Any], fname: str) -> None:
     dirname = os.path.dirname(fname)
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
@@ -48,7 +49,7 @@ def savetxt(arr: SmartArray, fname: str) -> None:
     with open(fname, 'w') as f:
         json.dump(obj, f)
 
-def loadtxt(fname: str) -> SmartArray:
+def loadtxt(fname: str) -> SmartArray[Any]:
     with open(fname, 'r') as f:
         obj = json.load(f)
     if not ('class' in obj and 'arr' in obj):

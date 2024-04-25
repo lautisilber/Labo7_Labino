@@ -4,7 +4,7 @@ if not TEST:
 else:
     from dummy_classes import dummy_serial as serial
 from time import sleep, time
-from typing import Optional, TypeVar, Literal, Any, Callable
+from typing import Optional, TypeVar, Literal, Any
 import sys
 import glob
 import json
@@ -30,7 +30,7 @@ def get_devices() -> list[str]:
     else:
         raise EnvironmentError('Unsupported platform')
 
-    result = []
+    result: list[str] = []
     for port in ports:
         try:
             s = serial.Serial(port)
@@ -180,7 +180,7 @@ class SerialManager(SerialManagerGeneric):
         '''
             n son la cantidad de veces que se samplean las balanzas para obtener el promedio
         '''
-        if not isinstance(n, int):
+        if not isinstance(n, int): # type: ignore
             raise TypeError()
         if n < 0:
             raise ValueError()
@@ -202,11 +202,11 @@ class SerialManager(SerialManagerGeneric):
             index es el indice de la balanza a consultar
             n son la cantidad de veces que se samplean las balanzas para obtener el promedio
         '''
-        if not isinstance(index, int):
+        if not isinstance(index, int): # type: ignore
             raise TypeError()
         if index < 0:
             raise ValueError()
-        if not isinstance(n, int):
+        if not isinstance(n, int): # type: ignore
             raise TypeError()
         if n < 0:
             raise ValueError()
@@ -242,13 +242,12 @@ class SerialManager(SerialManagerGeneric):
         if res is None:
             lh.warning('Arduino: Failed dht command. Returned None')
             return None
-        if res is not None:
-            try:
-                res = json.loads(res)
-                res = res['hum'], res['temp']
-            except:
-                lh.warning(f'Arduino: Failed dht command. Couldn\'t parse json: {res}')
-                res = None
+        try:
+            res = json.loads(res)
+            res = res['hum'], res['temp']
+        except:
+            lh.warning(f'Arduino: Failed dht command. Couldn\'t parse json: {res}')
+            res = None
         return res
 
     def cmd_stepper(self, steps: int, detach: bool=True) -> bool:
@@ -256,7 +255,7 @@ class SerialManager(SerialManagerGeneric):
             steps es el numero de pasos que el servo debe dar (si es negativo son pasos hacica atras)
             si detach es positivo, se detachea el stepper al final
         '''
-        if not isinstance(steps, int) or not isinstance(detach, bool):
+        if not isinstance(steps, int) or not isinstance(detach, bool): # type: ignore
             raise TypeError()
         cmd = f'stepper {steps}' if not detach else f'stepper {steps} 1'
         res = self._send_command_wait_response_retries(cmd, timeout_long_s=5*60)
@@ -290,20 +289,20 @@ class SerialManager(SerialManagerGeneric):
         '''
             prende la bomba por el tiempo en ms indicado, en la intensidad en % indicada
         '''
-        if not all(isinstance(v, int) for v in (tiempo, intensidad)):
+        if not all(isinstance(v, int) for v in (tiempo, intensidad)): # type: ignore
             raise TypeError()
         if tiempo <= 0 or (intensidad <= 0 or intensidad > 100):
             raise ValueError()
         res = self._send_command_wait_response_retries(f'pump {tiempo} {intensidad}')
         res = res == 'OK'
-        if res is None:
+        if not res:
             lh.warning('Arduino: Failed pump command')
         else:
             lh.debug(f'Arduino: Succeeded pump command')
         return res
 
     def cmd_stepper_attach(self, attach: bool):
-        if not isinstance(attach, bool):
+        if not isinstance(attach, bool): # type: ignore
             raise TypeError()
         res = self._send_command_wait_response_retries(f'stepper_attach {1 if attach else 0}')
         if res is None:
@@ -313,7 +312,7 @@ class SerialManager(SerialManagerGeneric):
         return res
 
     def cmd_servo_attach(self, attach: bool):
-        if not isinstance(attach, bool):
+        if not isinstance(attach, bool): # type: ignore
             raise TypeError()
         res = self._send_command_wait_response_retries(f'servo_attach {1 if attach else 0}')
         if res is None:

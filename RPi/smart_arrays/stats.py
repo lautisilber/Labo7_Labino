@@ -1,13 +1,11 @@
 from .smart_array_base import SmartArrayNumber, SmartListNumber
 from .smart_array import SmartArrayInt
-from typing import TypeVar, Union, Optional
+from typing import Sequence, TypeVar, Union, Optional, overload
 import itertools
 
 R = TypeVar('R', bound=float)
 
-S = Union[SmartArrayNumber[R], SmartListNumber[R]]
-
-def calculate_quartiles(arr: S) -> tuple[R, R, R]:
+def calculate_quartiles(arr: Union[SmartArrayNumber[R], SmartListNumber[R]]) -> tuple[R, R, R]:
     a = arr.copy()
     a.sort()
     l = len(a)
@@ -16,7 +14,13 @@ def calculate_quartiles(arr: S) -> tuple[R, R, R]:
     q3 = a[3 * l // 4]
     return q1, q2, q3
 
-def interquartile_range_filter(arr: S) -> S:
+
+@overload
+def interquartile_range_filter(arr: SmartArrayNumber[R]) -> SmartArrayNumber[R]: ...
+@overload
+def interquartile_range_filter(arr: SmartListNumber[R]) -> SmartListNumber[R]: ... # type: ignore
+
+def interquartile_range_filter(arr: Union[SmartArrayNumber[R], SmartListNumber[R]]) -> Union[SmartArrayNumber[R], SmartListNumber[R]]:
     a = arr.copy()
     a.sort()
     l = len(a)
@@ -62,7 +66,8 @@ def get_fastest_path(l: Union[SmartArrayNumber[C], SmartListNumber[C]], starting
         l_init = starting_position
         l_rest = l.copy()
 
-    tot_abs_sum = lambda _l: sum(abs(_l[i]-_l[i+1]) for i in range(len(_l)-1))
+    def tot_abs_sum(l_: Sequence[C]) -> float:
+        return sum(abs(l_[i]-l_[i+1]) for i in range(len(l_)-1))
 
     permutations = itertools.permutations(l_rest)
 
@@ -78,7 +83,7 @@ def get_fastest_path(l: Union[SmartArrayNumber[C], SmartListNumber[C]], starting
             min_total_abs_diff = contesting_path_cost
 
     # get indices of permutation
-    indices = list()
+    indices: list[int] = list()
     for e in best_path[1 if starting_position not in l else 0:]:
         for i, o in enumerate(l):
             if o == e and i not in indices:

@@ -11,9 +11,11 @@ class SystemsManager:
     def __init__(self, systems: Union[Sequence[System], System]) -> None:
         if isinstance(systems, System):
             self.systems = (systems,)
-        elif isinstance(systems, Sequence):
+        elif isinstance(systems, Sequence): # type: ignore
             self.systems = tuple(systems)
         else:
+            raise TypeError(f'systems was not a sequence of System or System. Instead was {type(systems)}')
+        if not all(isinstance(s, System) for s in self.systems): # type: ignore
             raise TypeError(f'systems was not a sequence of System or System. Instead was {type(systems)}')
         self.n_systems = len(self.systems)
 

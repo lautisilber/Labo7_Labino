@@ -148,7 +148,7 @@ class ScheduleTester:
         if not all(w for w in self.system.history_watering): return
         watered = tuple('Si' if w[-1] else 'No' for w in self.system.history_watering) # que macetas se regaron
         goals = SmartArrayFloat(sch.current_goal for sch in self.schedules) # cuales son los pesos objetivos actuales
-        on_goals = tuple('Si' if sch._in_goal(w) else 'No' for sch, w in zip(self.schedules, weights)) # si esta en el peso objetivo
+        on_goals = tuple('Si' if sch.in_goal(w) else 'No' for sch, w in zip(self.schedules, weights)) # si esta en el peso objetivo
         derivadas = tuple(m if o else u if g > w else d for w, g, o in zip(weights, goals, (o == 'Si' for o in on_goals))) # 0 si on_goal, 1 si hay que aumentar peso para llegar al objetivo, -1 si hay que perder peso para llegar al objetivo
         step_sched = tuple(str(i) if not f else 'End' for i, f in zip(self.schedule_steps, self.finished_schedules)) # numero de step de los schedules
         step_sequence = tuple(s.curr_step_n for s in self.sequences) # numero de step de la sequence (pesos para testear)

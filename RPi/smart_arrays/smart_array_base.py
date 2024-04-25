@@ -22,16 +22,16 @@ def get_range_length(start: int, stop: int, step: int=0) -> int:
 class SmartArray(Sequence[T]):
     def __init__(self, a: Union[Collection[T], Generator[T, None, None]], dtype: Optional[type[T]]=None, _skip_type_checking: bool=False) -> None:
         self.arr: list[T] = list(a)
-        should_cast: bool = False
+        self._should_cast: bool = False
         if dtype:
             if not _skip_type_checking:
                 if not all(isinstance(e, dtype) for e in self.arr):
                     if all(castable(e, dtype) for e in self.arr):
-                        should_cast = True
+                        self._should_cast = True
                     else:
                         raise TypeError(f'Not all elements of a were of type {dtype}')
                 self.t: type[T] = dtype
-                self.arr = [self.t(e) if should_cast else e for e in self.arr]
+                self.arr = [self.t(e) if self._should_cast else e for e in self.arr]
         else:
             if len(self.arr) == 0:
                 raise Exception('Cannot instantiate a SmartArrayBase with an empty a and a dtype == None')
@@ -62,14 +62,14 @@ class SmartArray(Sequence[T]):
             return self.arr[key]
     
     @overload
-    def __setitem__(self, key: slice, value: Union[T, Sequence[T]]):
+    def __setitem__(self, key: slice, value: Union[T, Sequence[T]]) -> None:
         ...
 
     @overload
-    def __setitem__(self, key: int, value: T):
+    def __setitem__(self, key: int, value: T) -> None:
         ...
 
-    def __setitem__(self, key: Union[int, slice], value: Union[T, Sequence[T]]):
+    def __setitem__(self, key: Union[int, slice], value: Union[T, Sequence[T]]) -> None:
         if isinstance(key, slice):
             s_len = len(self)
             start: Optional[int] = key.start
@@ -83,15 +83,33 @@ class SmartArray(Sequence[T]):
             if stop > s_len:
                 raise IndexError(f'Slice stops at {stop}, when length is {s_len}')
             if isinstance(value, Sequence):
-                if len(value) != slice_length:
-                    raise IndexError(f'Index mismatch. The slice contained {slice_length} indices. value has length {len(value)}')
+                if len(value) != slice_length: # type: ignore
+                    raise IndexError(f'Index mismatch. The slice contained {slice_length} indices. value has length {len(value)}') # type: ignore
+                if not self._should_cast:
+                    if not all(isinstance(e, self.t) for e in value): # type: ignore
+                        raise TypeError(f'Not all elements of value are of type {self.t}')
                 for i, j in enumerate(range(start, stop, step)):
-                    self.arr[j] = self.t(value[i])
+                    if self._should_cast:
+                        self.arr[j] = self.t(value[i])
+                    else:
+                        self.arr[j] = value[i]
             else:
+                if not self._should_cast:
+                    if not isinstance(value, self.t):
+                        raise TypeError(f'value is not of type {self.t}')
                 for i in range(start, stop, step):
-                    self.arr[i] = self.t(value)
+                    if self._should_cast:
+                        self.arr[i] = self.t(value)
+                    else:
+                        self.arr[i] = value
         else:
-            self.arr[key] = self.t(value)
+            if self._should_cast:
+                self.arr[key] = self.t(value)
+            else:
+                if not isinstance(value, self.t):
+                    raise TypeError(f'value is not of type {self.t}')
+                else:
+                    self.arr[key] = value
 
     def __contains__(self, item: Any) -> bool:
         return item in self.arr
@@ -122,13 +140,13 @@ class SmartArray(Sequence[T]):
     def _binary_op(this: Union[Collection[U], U], that: Union[Collection[V], V], op: Callable[[U, V], W]) -> Generator[W, None, None]:
         if isinstance(this, Collection):
             if isinstance(that, Collection):
-                if not len(this) == len(that):
+                if not len(this) == len(that): # type: ignore
                     raise ValueError('length of iterables does not match')
-                return (op(a, b) for a, b in zip(this, that))
+                return (op(a, b) for a, b in zip(this, that)) # type: ignore
             else:
-                return (op(a, that) for a in this)
+                return (op(a, that) for a in this) # type: ignore
         elif isinstance(that, Collection):
-            return (op(this, b) for b in that)
+            return (op(this, b) for b in that) # type: ignore
         raise TypeError('Neither is an iterable')
     
     @staticmethod
@@ -153,11 +171,15 @@ class SmartArray(Sequence[T]):
     def _in_place_binary_op(self, other: Union[Collection[U], U], op: Callable[[T, U], T]) -> None:
         for i, v in enumerate(SmartArray._binary_op(self, other, op)): # type: ignore
             self[i] = v
+
+    def _in_place_unary_op(self, op: Callable[[T], T]) -> None:
+        for i, v in enumerate(self._unary_op(self, op)): # type: ignore
+            self[i] = v
     
     def reverse(self) -> None:
         self.arr.reverse()
 
-    def sort(self, *args, key: Optional[Callable[[T], Any]]=None, reverse: bool=False) -> None:
+    def sort(self, *args: tuple[Any,...], key: Optional[Callable[[T], Any]]=None, reverse: bool=False) -> None:
         self.arr.sort(*args, key=key, reverse=reverse) # type: ignore
 
     def copy(self, a: Optional[Union[Collection[T], Generator[T, None, None]]]=None) -> Self:
@@ -205,8 +227,9 @@ class SmartList(SmartArray[T], MutableSequence[T]):
 ### typed base
 
 import operator as op
-from numbers import Complex
+from numbers import Complex, Real
 from statistics import mean, stdev
+import math
 
 C = TypeVar('C', bound=complex) # its meant to signify complex, floats, ints and bools
 
@@ -388,5 +411,21 @@ class SmartArrayNumber(SmartArray[C], Set[C]): # type: ignore
         return True
     
 class SmartListNumber(SmartArrayNumber[C], SmartList[C], MutableSet[C]): # type: ignore
-    def __init__(self, a: Union[Collection[C], Generator[C, None, None]], dtype: Optional[type[C]] = None) -> None:
+    def __init__(self, a: Union[Collection[C], Generator[C, None, None]], dtype: Optional[type[C]]=None) -> None:
         super(SmartArrayNumber, self).__init__(a, dtype)
+
+R = TypeVar('R', bound=float)
+
+class SmartArrayReal(SmartArrayNumber[R]):
+    def __init__(self, a: Union[Collection[R], Generator[R, None, None]], dtype: Optional[type[R]]=None) -> None:
+        super().__init__(a, dtype)
+        if not issubclass(self.dtype, Real):
+            raise TypeError(f'dtype is {self.dtype} instead of {Real}')
+
+    def sqrt(self) -> Self:
+        self._in_place_unary_op(math.sqrt) # type: ignore
+        return self
+    
+class SmartListReal(SmartArrayReal[R], SmartListNumber[R]):
+    def __init__(self, a: Union[Collection[R], Generator[R, None, None]], dtype: Optional[type[R]]=None) -> None:
+        super(SmartArrayReal, self).__init__(a, dtype)

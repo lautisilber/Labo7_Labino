@@ -4,7 +4,7 @@ if not TEST:
     from picamera import PiCamera # type: ignore
 else:
     from dummy_classes.dummy_picamera import PiCamera
-from typing import Optional, Tuple, Union, Dict, Any
+from typing import Optional, Tuple, Any
 import os
 from sched import scheduler
 import subprocess
@@ -34,10 +34,10 @@ class CameraController:
         self.save_dir = save_dir
         self.n_files = n_files
 
-        self.camera = PiCamera()
-        self.camera.framerate = framerate
-        self.camera.resolution = resolution
-        self.camera.vflip = False
+        self.camera = PiCamera() # type: ignore
+        self.camera.framerate = framerate # type: ignore
+        self.camera.resolution = resolution # type: ignore
+        self.camera.vflip = False # type: ignore
         
         self.conversion_queue: deque[CameraController.ConversionTarget] = deque(maxlen=30)
         
@@ -46,7 +46,7 @@ class CameraController:
 
     @property
     def framerate(self) -> int:
-        return self.camera.framerate
+        return self.camera.framerate # type: ignore
 
     @property
     def resolution(self) -> int:
@@ -54,7 +54,7 @@ class CameraController:
 
     def __del__(self) -> None:
         if CameraController.recording:
-            self.camera.stop_recording()
+            self.camera.stop_recording() # type: ignore
 
     @property
     def get_save_path(self) -> str:
@@ -86,18 +86,18 @@ class CameraController:
 
         self.last_conversion_path = path
         CameraController.recording = True
-        self.camera.start_recording(path)
+        self.camera.start_recording(path) # type: ignore
         lh.debug(f'Started recording to file {path}')
         return True
 
     def stop_recording(self) -> None:
         if not CameraController.recording: return
-        self.camera.stop_recording()
+        self.camera.stop_recording() # type: ignore
         CameraController.recording = False
         lh.debug(f'Stopped recording to file {self.last_conversion_path}')
         if self.last_conversion_path is None:
             self.last_conversion_path = self.get_save_path
-        base, ext = os.path.splitext(self.last_conversion_path)
+        base, _ = os.path.splitext(self.last_conversion_path)
         new_path = base + '.mp4'
         
         files = [os.path.join(self.save_dir, f) for f in os.listdir(self.save_dir) if os.path.isfile(os.path.join(self.save_dir, f)) and bool(self.files_re.fullmatch(f))]
@@ -147,10 +147,12 @@ class CameraController:
         lh.debug(f'begin converting')
         def cb():
             try:
-                outs, errs = p.communicate(timeout=ct.timeout)
+                # outs, errs = p.communicate(timeout=ct.timeout)
+                _, _ = p.communicate(timeout=ct.timeout)
             except subprocess.TimeoutExpired:
                 p.kill()
-                outs, errs = p.communicate()
+                # outs, errs = p.communicate()
+                _, _ = p.communicate()
             CameraController.converting = False
             lh.debug(f'end converting')
             os.remove(ct.source)

@@ -58,27 +58,6 @@ else:
     stream_handler.addFilter(LoggingLevelFilter((logging.WARNING, logging.ERROR, logging.CRITICAL)))
 logger.addHandler(stream_handler)
 
-def debug(msg: str, *args) -> None:
-    logger.debug(msg, *args)
-
-def info(msg: str, *args) -> None:
-    logger.info(msg, *args)
-
-def warning(msg: str, *args) -> None:
-    logger.warning(msg, *args)
-
-def error(msg: str, *args) -> None:
-    logger.error(msg, *args)
-
-def critical(msg: str, *args) -> None:
-    logger.critical(msg, *args)
-
-def exception(msg: str, *args) -> None:
-    logger.exception(msg, *args)
-
-def log(level: int, msg: str, *args) -> None:
-    logger.log(level, msg, *args)
-
 import sys
 from typing import Type, Optional
 from types import TracebackType
