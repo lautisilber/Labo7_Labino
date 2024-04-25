@@ -122,18 +122,15 @@ class WateringScheduleStep:
 
     def __post_init__(self):
         if self.weight_threshold < 0:
-            raise ValueError(f'weight_threshold should be 0 or positive. it is {
-                             self.weight_threshold}')
+            raise ValueError(f'weight_threshold should be 0 or positive. it is {self.weight_threshold}')
         if self.max_weight_difference is not None:
             if self.max_weight_difference < 0:
-                raise ValueError(f'max_weight_difference should be 0 or positive. it is {
-                                 self.max_weight_difference}')
+                raise ValueError(f'max_weight_difference should be 0 or positive. it is {self.max_weight_difference}')
             if self.weight_threshold - 1 >= self.max_weight_difference:
                 raise ValueError(
                     'weight_threshold (- 1 for errors) cannot be greater than max_weight_difference, otherwise goal will never be reached')
         if not isinstance(self.time, timedelta):  # type: ignore
-            raise TypeError(f'time shoud be a timedelta. Instead it is {
-                            type(self.time)}')
+            raise TypeError(f'time shoud be a timedelta. Instead it is {type(self.time)}')
 
 
 class WateringSchedule:
@@ -344,8 +341,7 @@ class System:
         self.intensities_unchanged_times = SmartArrayInt.zeros(self.n_balanzas)
 
         if watering_min_diff_grams >= watering_max_diff_grams:
-            raise ValueError(f'System {self.name}. watering_min_diff_grams has to be lower than watering_max_diff_grams. ({
-                             watering_min_diff_grams}, {watering_max_diff_grams})')
+            raise ValueError(f'System {self.name}. watering_min_diff_grams has to be lower than watering_max_diff_grams. ({watering_min_diff_grams}, {watering_max_diff_grams})')
         self.watering_min_diff_grams = watering_min_diff_grams
         self.watering_max_diff_grams = watering_max_diff_grams
         self.watering_max_unchanged_times = watering_max_unchanged_times
@@ -586,8 +582,7 @@ class System:
         if isinstance(next_pos, Position):
             next_pos = next_pos.stepper
         elif not isinstance(next_pos, int): # type: ignore
-            raise TypeError(f'System {
-                            self.name}: next_pos is not of type Position or int. It is of type {type(next_pos)}')
+            raise TypeError(f'System {self.name}: next_pos is not of type Position or int. It is of type {type(next_pos)}')
         # save starting position
         start_pos = self.stepper_pos
         # if final position is same as starting, do nothing
@@ -671,8 +666,7 @@ class System:
 
     def _check_all_right(self, balanza_index: int) -> bool:
         if balanza_index < 0 or balanza_index >= self.n_balanzas:
-            raise IndexError(f'System {self.name}: balanza_index is {
-                             balanza_index} and should be >= 0 and < {self.n_balanzas}')
+            raise IndexError(f'System {self.name}: balanza_index is {balanza_index} and should be >= 0 and < {self.n_balanzas}')
         # uso mi libraria para poder indexar mas facilmente
         history_weight = SmartArrayFloat(self.history_weights[balanza_index])
         history_watering = SmartArrayBool(self.history_watering[balanza_index])
@@ -703,17 +697,15 @@ class System:
                     zip(history_watering[:recent_history], history_intensities[:recent_history], history_failed_checks[:recent_history]))):
                 lh.critical((f'check before watering: sistema {self.name}, balanza {balanza_index} '
                             '-> No paso el chequeo para regar. Esta regando demasiado intenso demasiadas '
-                             f'veces (history_watering={history_watering}, history_intensities={
-                    history_intensities}, '
-                    f'history_weight={history_weight})'))
+                             f'veces (history_watering={history_watering}, history_intensities={history_intensities}, '
+                             f'history_weight={history_weight})'))
                 return False
 
         # si vienen muchos valores negativos -> INHABILITAR
         if sum(w < 0 for w in history_weight) > 5:
             lh.critical((f'check before watering: sistema {self.name}, balanza {balanza_index} '
-                        f'-> No paso el chequeo para regar. tuvo mas de 5 pesos negativos ({
-                history_weight}). '
-                'Inhabilitando balanza hasta intervencion manual'))
+                        f'-> No paso el chequeo para regar. tuvo mas de 5 pesos negativos ({history_weight}). '
+                        'Inhabilitando balanza hasta intervencion manual'))
             self.inhabilitated_balanzas[balanza_index] = True
             return False
 
@@ -738,8 +730,7 @@ class System:
             if not watered_last_tick[i]:
                 continue
             if low_diff[i] and big_diff[i]:
-                lh.warning(f'System {self.name}. The weight difference was detected to be low and big at the same time. ({
-                           curr_weights}, {self.last_weights}, {watered_last_tick})')
+                lh.warning(f'System {self.name}. The weight difference was detected to be low and big at the same time. ({curr_weights}, {self.last_weights}, {watered_last_tick})')
             if low_diff[i]:
                 # if it was supposed to be watered but the differece in weight was low
                 if self.intensities_unchanged_times[i] >= self.watering_max_unchanged_times:
@@ -765,8 +756,7 @@ class System:
                     f'Sistema {self.name}: No se pudo leer las balanzas. Volviendo a intentar...')
         means, stdevs, n_filtered, n_unsuccessful = res
         if not (len(means) == len(stdevs) == self.n_balanzas):
-            lh.warning(f'Sistema {self.name}: Al leer se obtuvo una lista de largo {
-                len(means)}, {len(stdevs)} cuando hay {self.n_balanzas} balanzas')
+            lh.warning(f'Sistema {self.name}: Al leer se obtuvo una lista de largo {len(means)}, {len(stdevs)} cuando hay {self.n_balanzas} balanzas')
 
         # actualizar watering_schedules, chequear que macetas hay que regar y obtener los objetivos actuales de peso
         for i in range(self.n_balanzas):
@@ -786,8 +776,7 @@ class System:
             self.history_intensities[i].append(self.intensities[i])
             all_right[i] = self._check_all_right(i)
             self.history_failed_checks[i].append(all_right[i])
-        lh.debug(f'Datos de mediciones - sistema {self.name}: pesos=({means}+/-{
-                 stdevs}), a_regar={macetas_to_water}, intensidades={self.intensities}')
+        lh.debug(f'Datos de mediciones - sistema {self.name}: pesos=({means}+/-{stdevs}), a_regar={macetas_to_water}, intensidades={self.intensities}')
 
         # regar
         any_watering = any(macetas_to_water) and any(
@@ -808,8 +797,7 @@ class System:
                     position_index=i,
                     intensity=self.intensities[i]
                 )
-                lh.info(f'Tick: Watering {i}, starting with weight {
-                        means[i]} +/- {stdevs[i]} and a goal of {grams_goals[i]}')
+                lh.info(f'Tick: Watering {i}, starting with weight {means[i]} +/- {stdevs[i]} and a goal of {grams_goals[i]}')
 
             if self.camera_controller is not None:
                 self.camera_controller.schedule_stop_recording(5)

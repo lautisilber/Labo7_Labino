@@ -1,7 +1,11 @@
 from __future__ import annotations
 import sys
-from typing import Iterable, TypeVar, Optional, Collection, Sequence, Any, Union, Callable, Generator, Iterator, Self, Set, MutableSequence, MutableSet
-from typing import overload
+from typing import Iterable, TypeVar, Optional, Collection, Sequence, Any, Union, Callable, Generator, Iterator, Set, MutableSequence, MutableSet, overload
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
+
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -173,7 +177,7 @@ class SmartArray(Sequence[T]):
             self[i] = v
 
     def _in_place_unary_op(self, op: Callable[[T], T]) -> None:
-        for i, v in enumerate(self._unary_op(self, op)): # type: ignore
+        for i, v in enumerate(SmartArray._unary_op(self, op)): # type: ignore
             self[i] = v
     
     def reverse(self) -> None:

@@ -1,0 +1,5 @@
+-r requirements.txt
+RPi.GPIO>=0.7.1
+gpiozero==2.*
+pyserial==3.*
+picamera==1.*

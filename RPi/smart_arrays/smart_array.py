@@ -1,5 +1,9 @@
 from .smart_array_base import SmartArrayNumber, SmartArrayReal, SmartListNumber, SmartListReal
-from typing import Collection, Generator, Self, Union
+from typing import Collection, Generator, Union
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
 
 
 class SmartArrayFloat(SmartArrayReal[float]):

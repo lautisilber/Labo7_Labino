@@ -56,5 +56,5 @@ def loadtxt(fname: str) -> SmartArray[Any]:
         raise ValueError('Bad file')
     if obj['class'] not in name_class.keys() or not isinstance(obj['arr'], list):
         raise ValueError('Bad file')
-    return name_class[obj['class']](obj['arr'])
+    return name_class[obj['class']](obj['arr']) # type: ignore
 
