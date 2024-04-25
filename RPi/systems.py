@@ -137,10 +137,14 @@ class WateringScheduleStep:
 
 
 class WateringSchedule:
-    def __init__(self, steps: tuple[WateringScheduleStep, ...], cyclic: bool) -> None:
+    def __init__(self, steps: Optional[tuple[WateringScheduleStep, ...]], cyclic: bool) -> None:
+        '''if steps is None, the schedule is considered null and this maceta will be ignored'''
         self.steps = steps
+        if self.steps is None:
+            self.n_steps = 0
+        else:
+            self.n_steps = len(self.steps)
         self.cyclic = cyclic
-        self.n_steps = len(self.steps)
         self._current_step: int = 0
         self._last_step_init_time: datetime = datetime.now()
         # if _got_to_weight_goal is false, the balanza has not yet reached the weight goal for this step.
@@ -158,6 +162,8 @@ class WateringSchedule:
 
     def in_goal(self, curr_weight: float) -> bool:
         '''check if curr_weight is in goal for this step (!= should water)'''
+        if self.steps is None:
+            return True
         step = self.steps[self._current_step]
         if step.max_weight_difference is not None:
             return step.weight - step.max_weight_difference <= curr_weight <= step.weight + step.max_weight_difference
@@ -177,6 +183,8 @@ class WateringSchedule:
             return True
 
     def _next_step(self, curr_weight: float) -> None:
+        if self.steps is None:
+            return
         self._current_step += 1
         if self._current_step >= self.n_steps:
             if self.cyclic:
@@ -189,6 +197,8 @@ class WateringSchedule:
         self._last_steps_weight = curr_weight
 
     def should_water(self, curr_weight: float) -> bool:
+        if self.steps is None:
+            return False
         if self.in_goal(curr_weight):
             return False
         step = self.steps[self._current_step]
@@ -209,6 +219,8 @@ class WateringSchedule:
                 if is, go to next step and resample step
         either way (if step was increased, the step object has been resampled), water if necessary following the step's goal
         '''
+        if self.steps is None:
+            return
         step = self.steps[self._current_step]
         if not self._got_to_weight_goal:
             if self.in_goal(curr_weight):
@@ -226,7 +238,9 @@ class WateringSchedule:
 
     @property
     def current_goal(self) -> float:
-        '''returns the weight goal for the current step'''
+        '''returns the weight goal for the current step. returns -1 if null schedule'''
+        if self.steps is None:
+            return -1
         step = self.steps[self._current_step]
         return step.weight
 
