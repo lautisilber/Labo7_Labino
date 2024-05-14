@@ -36,6 +36,18 @@ def show_weights(systems_manager: SystemsManager, system_index: int, n: Optional
     systems_manager.show_system_weights(system_index, n)
 
 
+def show_weights_pretty(systems_manager: SystemsManager, system_index: int, n: Optional[int] = None) -> None:
+    systems_manager.begin_single(system_index)
+    res = systems_manager.systems[system_index].balanzas.read_stats(n)
+    if res is None:
+        print('No se pudieron leer los pesos :(')
+        return
+    means, stdevs, _, _ = res
+    print('Los pesos son:')
+    for i, (m, e) in enumerate(zip(means, stdevs)):
+        print(f'{i+1}: {m:.4f} +/- {e:.4f}')
+
+
 def water_test(systems_manager: SystemsManager, system_index: int, balanza_index: int, intensity: int = 0) -> None:
     systems_manager.begin_single(system_index)
     systems_manager.water_test(system_index, balanza_index, intensity)
@@ -77,9 +89,11 @@ def main() -> None:
 
     # show_weights(systems_manager, 0, 10)
 
+    show_weights_pretty(systems_manager, 0, 15)
+
     # water_test(systems_manager, system_index=0, balanza_index=1, intensity=12)
 
-    run(systems_manager)
+    # run(systems_manager)
 
 
 if __name__ == '__main__':

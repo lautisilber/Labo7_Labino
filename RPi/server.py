@@ -1,41 +1,42 @@
-import socketserver
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from socketserver import BaseRequestHandler
 import socket
-# from socketserver import _AfInetAddress
-from typing import Callable, Any, Self, Union, Tuple
+from typing import Callable, Any, Union
 import threading
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
 
-import os
-if hasattr(os, "fork"):
-    server_mixin = socketserver.ForkingMixIn
-else:
-    server_mixin = socketserver.ThreadingMixIn
 
-class TCPHandler(socketserver.StreamRequestHandler):
+class RequestHandlerHandler(BaseHTTPRequestHandler):
+    '''
+    The idea is that one can inherit from this request handler
+    One can add methods with the following naming scheme: "route_<name>_<method>"
+    where name is the name of the route (if underscores are present they will be treated
+    as sub directories of the url), and method is the request method: GET, POST, etc
+    '''
     def handle(self) -> None:
-        for line in self.rfile.readlines():
-            print(line)
-        self.wfile.write('OK')
-
-class ThreadedTCPServer(server_mixin, socketserver.TCPServer):
-    def __init__(self, RequestHandlerClass: Callable[[Any, Any, Self], socketserver.BaseRequestHandler], host: str='127.0.0.1', port: int=9090, bind_and_activate: bool=True) -> None:
-        server_address = (host, port)
-        super().__init__(server_address, RequestHandlerClass, bind_and_activate)
-
-    def __del__(self) -> None:
-        self.shutdown()
-        super().__del__()
+        if hasattr(self, 'headers'):
+            request_length = int(self.headers.getheader('Content-Length'))
+            with self.rfile as f:
+                a = f.read(request_length)
+            data = a.decode('ascii')
+        else:
+            data = str(self.request.recv(1024), 'ascii')
+        self.send_response(200, data)
 
 
 if __name__ == '__main__':
-    def client(ip, port, message):
+    def client(ip: str, port: int, message: str):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect((ip, port))
             sock.sendall(bytes(message, 'ascii'))
             response = str(sock.recv(1024), 'ascii')
             print("Received: {}".format(response))
 
-    with ThreadedTCPServer(TCPHandler, port=9091) as server:
-        ip, port = server.server_address
+    HOST, PORT = "localhost", 2000
+    with ThreadingHTTPServer((HOST, PORT), RequestHandlerHandler) as server:
 
         # Start a thread with the server -- that thread will then start one
         # more thread for each request
@@ -45,9 +46,9 @@ if __name__ == '__main__':
         server_thread.start()
         print("Server loop running in thread:", server_thread.name)
 
-        client(ip, port, "Hello World 1")
-        client(ip, port, "Hello World 2")
-        client(ip, port, "Hello World 3")
+        client(HOST, PORT, "Hello World 1")
+        client(HOST, PORT, "Hello World 2")
+        client(HOST, PORT, "Hello World 3")
 
         server.shutdown()
 

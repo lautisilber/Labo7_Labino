@@ -46,7 +46,7 @@ def try_cast_omit_none(v: Any, t: type[T]) -> Optional[T]:
     if v is None:
         return None
     try:
-        v = t(v)
+        v = t(v) # type: ignore
     except:
         v = None
     return v
