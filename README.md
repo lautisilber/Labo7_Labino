@@ -1,5 +1,9 @@
 # Labo7_Labino
 
+This is my labiratory final oroject at the University of Buenos Aires. It has two parts:
+- The Arduino code is built as an interface between a uart serial connection an the hardware (motors, pumps, and load cells). It uses a non-standard way of communication with the sensors to be able to drive them in a serial configuration and use less ports.
+- The Python origram communicates with the Arduino. Takes the sensor readings, analyses them, and based on the findings, drives the motos and pump accordingly. It has several failsafes and can perform analytical error propagation.
+
 ## Instalar Arduino-cli
 
 Para instalar la herramienta de comandos de Arduino, correr el siguiente comando
