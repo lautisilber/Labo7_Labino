@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use crate::balanzas::Balanzas;
+use crate::balanzas::{Balanzas, BalanzasError};
 use serde_derive::{Deserialize, Serialize};
-use crate::serial_manager::{DHTResult, SerialManager};
-use crate::watering_position::WateringPosition;
-use crate::watering_schedule::WateringSchedule;
+use crate::serial_manager::{DHTResult, SerialManager, SerialManagerError};
+use crate::watering_position::{WateringPosition, WateringPositionError};
+use crate::watering_schedule::{WateringSchedule, WateringScheduleError};
 use crate::utils::{path_is_file, read_file, write_file, now_timestamp};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
@@ -23,9 +23,33 @@ fn get_system_names() -> Vec<String> {
     data.clone()
 }
 
-// Change the alias to use `Box<dyn error::Error>`.
-type GenError = Box<dyn std::error::Error>;
-type Result<T> = std::result::Result<T, GenError>;
+#[derive(Debug, thiserror::Error)]
+pub enum SystemError {
+    #[error("io error")]
+    IOError(#[from] std::io::Error),
+    #[error("file error")]
+    FileError(String, Option<String>),
+    #[error("system name error")]
+    SystemNameError(String),
+    #[error("# balanzas mismatch")]
+    NBalanzasMismatchError(String),
+    #[error("SerialManagerError")]
+    SerialManagerError(#[from] SerialManagerError),
+    #[error("serde_json error")]
+    SerdeJSONError(#[from] serde_json::Error),
+    #[error("balanzas error")]
+    BalanzasError(#[from] BalanzasError),
+    #[error("index error")]
+    IndexError(String),
+    #[error("WateringPositionError")]
+    WateringPositionError(#[from] WateringPositionError),
+    #[error("WateringScheduleError")]
+    WateringScheduleError(#[from] WateringScheduleError),
+    #[error("SystemTimeError")]
+    SystemTimeError(#[from] std::time::SystemTimeError),
+}
+
+type Result<T> = std::result::Result<T, SystemError>;
 
 pub struct System {
     name: String,
@@ -64,7 +88,7 @@ impl System {
     fn get_system_data_file_from_name(name: &str) -> Result<String> {
         let dir = System::get_dir_from_name(name)?;
         return match dir.join("internal").join("system_data.json").to_str() {
-            None => Err(Box::from("Path is empty")),
+            None => Err(SystemError::FileError("Path is empty".to_owned(), None)),
             Some(path) => Ok(path.to_string())
         }
     }
@@ -72,7 +96,7 @@ impl System {
     fn get_system_log_file_from_name(name: &str) -> Result<String> {
         let dir = System::get_dir_from_name(name)?;
         return match dir.join("log.csv").to_str() {
-            None => Err(Box::from("Path is empty")),
+            None => Err(SystemError::FileError("Path is empty".to_owned(), None)),
             Some(path) => Ok(path.to_string())
         }
     }
@@ -83,7 +107,7 @@ impl System {
         {
             let system_names = get_system_names();
             if system_names.contains(&name.to_owned()) {
-                return Err(Box::from(format!("System name {} already registered. Names already registered: {:?}", name, system_names)));
+                return Err(SystemError::SystemNameError(format!("System name {} already registered. Names already registered: {:?}", name, system_names)));
             }
         }
         add_system_name(name);
@@ -95,10 +119,10 @@ impl System {
             }
         };
         if positions.len() != _n_balanzas as usize {
-            return Err(Box::from(format!("Wrong length of positions vector. n_balanzas: {}, # positions: {}", _n_balanzas, positions.len())));
+            return Err(SystemError::NBalanzasMismatchError(format!("Wrong length of positions vector. n_balanzas: {}, # positions: {}", _n_balanzas, positions.len())));
         }
         if watering_schedules.len() != _n_balanzas as usize {
-            return Err(Box::from(format!("Wrong length of watering_schedules vector. n_balanzas: {}, # watering_schedules: {}", _n_balanzas, watering_schedules.len())));
+            return Err(SystemError::NBalanzasMismatchError(format!("Wrong length of watering_schedules vector. n_balanzas: {}, # watering_schedules: {}", _n_balanzas, watering_schedules.len())));
         }
         return Ok(System {
             name: name.to_string(),
@@ -173,7 +197,7 @@ impl System {
         }
 
         if self.n_balanzas != n_balanzas.unwrap() {
-            return Err(Box::from(format!("Wrong n_balanzas. Expected: {}, reported: {}", self.n_balanzas, n_balanzas.unwrap())));
+            return Err(SystemError::NBalanzasMismatchError(format!("Wrong n_balanzas. Expected: {}, reported: {}", self.n_balanzas, n_balanzas.unwrap())));
         }
 
         return Ok(());
@@ -201,7 +225,7 @@ impl System {
 
     pub fn water(&mut self, position_index: usize, intensity: i32) -> Result<()> {
         if position_index >= self.n_balanzas as usize {
-            return Err(Box::from(format!("position_index index error. max is : {}, reported: {}", self.n_balanzas, position_index)));
+            return Err(SystemError::IndexError(format!("position_index index error. max is : {}, reported: {}", self.n_balanzas, position_index)));
         }
 
         let tiempo_ms: u32;
@@ -237,7 +261,7 @@ impl System {
         let (means, stdevs, n_filtered, n_unsuccessful) = res.unwrap();
 
         if means.len() != self.n_balanzas as usize || stdevs.len() != self.n_balanzas as usize || n_filtered.len() != self.n_balanzas as usize {
-            return Err(Box::from(format!("Length of read didn't match expected {}. means {}, stdevs: {}, n_filtered: {}", self.n_balanzas, means.len(), stdevs.len(), n_filtered.len())));
+            return Err(SystemError::NBalanzasMismatchError(format!("Length of read didn't match expected {}. means {}, stdevs: {}, n_filtered: {}", self.n_balanzas, means.len(), stdevs.len(), n_filtered.len())));
         }
 
         // actualizar watering_schedules y chequear que macetas hay que regar

@@ -1,6 +1,10 @@
-type GenError = Box<dyn std::error::Error>;
-type Result<T> = std::result::Result<T, GenError>;
 use serde_derive::{Deserialize, Serialize};
+
+#[derive(Debug, thiserror::Error)]
+pub enum IntensityConfigError {
+    #[error("new error")]
+    NewError(String)
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct IntensityConfig {
@@ -11,12 +15,12 @@ pub struct IntensityConfig {
 }
 
 impl IntensityConfig {
-    pub fn new(initial_value: i32, final_value: i32, n_steps: u32, n_steps_not_incrementing: u32) -> Result<IntensityConfig> {
+    pub fn new(initial_value: i32, final_value: i32, n_steps: u32, n_steps_not_incrementing: u32) -> Result<IntensityConfig, IntensityConfigError> {
         if initial_value > final_value {
-            return Err(Box::from("Initial value greater than final value"));
+            return Err(IntensityConfigError::NewError("Initial value greater than final value".to_owned()));
         }
         if n_steps < n_steps_not_incrementing {
-            return Err(Box::from("Total steps smaller than steps not incrementing"));
+            return Err(IntensityConfigError::NewError("Total steps smaller than steps not incrementing".to_owned()));
         }
         return Ok(IntensityConfig {
             initial_value: initial_value,

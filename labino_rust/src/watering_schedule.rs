@@ -10,19 +10,25 @@ pub struct WateringScheduleStep {
     pub max_weight_difference: Option<f32>    
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum WateringScheduleError {
+    #[error("Creation error")]
+    CreationError(String),
+}
+
 impl WateringScheduleStep {
-    pub fn new(weight: f32, time: Duration, weight_treshold: f32, max_weight_difference: Option<f32>) -> Result<WateringScheduleStep, String> {
+    pub fn new(weight: f32, time: Duration, weight_treshold: f32, max_weight_difference: Option<f32>) -> Result<WateringScheduleStep, WateringScheduleError> {
         if weight_treshold < 0. {
-            return Err(format!("weight_treshold should be greater than 0. It was {}", weight_treshold));
+            return Err(WateringScheduleError::CreationError(format!("weight_treshold should be greater than 0. It was {}", weight_treshold)));
         }
         match max_weight_difference {
             None => {},
             Some(m) => {
                 if m < 0. {
-                    return Err(format!("max_weight_difference should be greater than 0 if it is not None. It was {}", m));
+                    return Err(WateringScheduleError::CreationError(format!("max_weight_difference should be greater than 0 if it is not None. It was {}", m)));
                 }
                 if weight_treshold - 1. >= m {
-                    return Err(format!("weight_threshold (- 1 for errors) cannot be greater than max_weight_difference, otherwise goal will never be reached. weight_treshold was {}, and max_weight_difference was {}", weight_treshold, m));
+                    return Err(WateringScheduleError::CreationError(format!("weight_threshold (- 1 for errors) cannot be greater than max_weight_difference, otherwise goal will never be reached. weight_treshold was {}, and max_weight_difference was {}", weight_treshold, m)));
                 }
             }
         }

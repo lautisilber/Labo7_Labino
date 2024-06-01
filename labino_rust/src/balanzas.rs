@@ -1,10 +1,26 @@
 use serde_derive::{Deserialize, Serialize};
+use crate::{serial_manager::{SerialManager, SerialManagerError}, utils::{input, path_is_file, read_file, write_file}};
 
-use crate::serial_manager::SerialManager;
-use crate::utils::{input, path_is_file, read_file, write_file};
+// type GenError = Box<dyn std::error::Error>;
+// type Result<T> = std::result::Result<T, GenError>;
 
-type GenError = Box<dyn std::error::Error>;
-type Result<T> = std::result::Result<T, GenError>;
+#[derive(Debug, thiserror::Error)]
+pub enum BalanzasError {
+    #[error("serde_json error")]
+    SerdeJSONError(#[from] serde_json::Error),
+    #[error("io error")]
+    IOError(#[from] std::io::Error),
+    #[error("Read error")]
+    ReadError(String),
+    #[error("SerialManagerError")]
+    SerialManagerError(#[from] SerialManagerError),
+    #[error("Value error")]
+    ValueError(String),
+    #[error("Length error")]
+    LengthError(String),
+}
+
+type Result<T> = std::result::Result<T, BalanzasError>;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Balanzas {
@@ -83,11 +99,11 @@ impl Balanzas {
 
     fn read_single_raw(&self, serial_manager: &mut SerialManager) -> Result<Vec<f32>> {
         match self.n_balanzas {
-            None => return Err(Box::from("Can't execute read_single_raw since n_balanzas was not set")),
+            None => return Err(BalanzasError::ReadError("Can't execute read_single_raw since n_balanzas was not set".to_owned())),
             Some(n_balanzas) => {
                 let raw_values = serial_manager.cmd_hx(self.n_arduino)?;
                 if raw_values.len() != n_balanzas as usize {
-                    return Err(Box::from(format!("Error reading single raw balanza. The length of the weights array didn't match n_balanzas (raw_values: {:?}, n_balanzas: {}", raw_values, n_balanzas)));
+                    return Err(BalanzasError::ReadError(format!("Error reading single raw balanza. The length of the weights array didn't match n_balanzas (raw_values: {:?}, n_balanzas: {}", raw_values, n_balanzas)));
                 }
                 return Ok(raw_values);
             }
@@ -106,7 +122,7 @@ impl Balanzas {
             }
         }
         if list_of_raw_vals.is_empty() {
-            return Err(Box::from("Error executing read_stats_raw because no reading could be made"));
+            return Err(BalanzasError::ValueError("Error executing read_stats_raw because no reading could be made".to_owned()));
         }
         let n_completed = list_of_raw_vals.len();
         let n_error = self.n_statistics as usize - n_completed;
@@ -147,7 +163,7 @@ impl Balanzas {
     pub fn read_stats(&self, serial_manager: &mut SerialManager) -> Result<(Vec<f32>,Vec<f32>,Vec<usize>,usize)> {
         // return [mean, stdev, n_stats_filtered_vals, n_unsuccessful_reads]
         if self.offsets.is_none() || self.offset_errors.is_none() || self.slopes.is_none() || self.slopes.is_none() {
-            return Err(Box::from("Error in read_stats. offset, offset_errors, slope, or slope_errors is None"));
+            return Err(BalanzasError::ValueError("Error in read_stats. offset, offset_errors, slope, or slope_errors is None".to_owned()));
         }
 
         let res = self.read_stats_raw(serial_manager)?;
@@ -177,13 +193,13 @@ impl Balanzas {
 
     pub fn calibrate_slope(&mut self, serial_manager: &mut SerialManager, weights: &Vec<f32>, weight_errors: &Vec<f32>) -> Result<()> {
         if weights.len() != self.n_balanzas.unwrap() as usize || weight_errors.len() != self.n_balanzas.unwrap() as usize {
-            return Err(Box::from(format!("Error in calibrate_slope. weights or weight_errors has wrong size. Weights size is {} and weight_errors size is {} but should be {}", weights.len(), weight_errors.len(), self.n_balanzas.unwrap())));
+            return Err(BalanzasError::LengthError(format!("Error in calibrate_slope. weights or weight_errors has wrong size. Weights size is {} and weight_errors size is {} but should be {}", weights.len(), weight_errors.len(), self.n_balanzas.unwrap())));
         }
         match &self.offsets {
-            None => return Err(Box::from("Can't calibrate slope since offsets is None")),
+            None => return Err(BalanzasError::ValueError("Can't calibrate slope since offsets is None".to_owned())),
             Some(offsets) => {
                 match &self.offset_errors {
-                    None => return Err(Box::from("Can't calibrate slope since offset_errors is None")),
+                    None => return Err(BalanzasError::ValueError("Can't calibrate slope since offset_errors is None".to_owned())),
                     Some(offset_errors) => {
                         let res = self.read_stats_raw(serial_manager)?;
                         // value = slope * mean + offset
@@ -256,7 +272,7 @@ pub fn calibrate_balanzas(balanzas: &mut Balanzas, serial_manager: &mut SerialMa
     res = res.replace(")", "");
     let split_res: Vec<String> = res.split("-").map(str::to_string).collect();
     if split_res.len() != 2 {
-        return Err(Box::from(format!("Error in inputing the weights: bad pattern. The input was \"{}\"", res)));
+        return Err(BalanzasError::ValueError(format!("Error in inputing the weights: bad pattern. The input was \"{}\"", res)));
     }
     let weights: Vec<f32> = split_res[0].split(",")
                                     .map(|s| s.parse::<f32>().expect("Couldn't parse a number in weights"))

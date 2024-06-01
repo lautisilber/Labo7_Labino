@@ -2,6 +2,12 @@ use crate::intensity_config::IntensityConfig;
 use serde_derive::{Deserialize, Serialize};
 use itertools::Itertools;
 
+#[derive(Debug, thiserror::Error)]
+pub enum WateringPositionError {
+    #[error("Index error")]
+    IndexError(String),
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct WateringPosition {
     pub stepper: i32,
@@ -53,7 +59,7 @@ impl WateringPosition {
         return path.windows(2).fold(0, |acc, window| acc + WateringPosition::distance(&l[window[0]], &l[window[1]]));
     }
 
-    pub fn find_minimal_distance_path(l: &[&WateringPosition], start_pos: i32) -> Result<Vec<usize>, String> {
+    pub fn find_minimal_distance_path(l: &[&WateringPosition], start_pos: i32) -> Result<Vec<usize>, WateringPositionError> {
         let n = l.len();
 
         let mut start_index: Option<usize> = None;
@@ -64,14 +70,14 @@ impl WateringPosition {
             }
         }
         if start_index.is_none() {
-            return Err(format!("The starting position ({}) was not found in the list of positoins ({:?})", start_pos, l).to_string());
+            return Err(WateringPositionError::IndexError(format!("The starting position ({}) was not found in the list of positoins ({:?})", start_pos, l).to_string()));
         }
 
         if n == 0 {
-            return Err("l.len() == 0".to_string());
+            return Err(WateringPositionError::IndexError("l.len() == 0".to_owned()));
         }
         if start_index.unwrap() >= n {
-            return Err(format!("start_index ({}) >= l.len() ({})", start_index.unwrap(), n).to_string());
+            return Err(WateringPositionError::IndexError(format!("start_index ({}) >= l.len() ({})", start_index.unwrap(), n).to_owned()));
         }
 
         let mut indices: Vec<usize> = (0..n).collect();
