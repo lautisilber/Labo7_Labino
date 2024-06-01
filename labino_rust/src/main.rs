@@ -1,4 +1,5 @@
 pub mod utils;
+pub mod logger_config;
 pub mod intensity_config;
 pub mod watering_position;
 pub mod watering_schedule;
@@ -15,6 +16,9 @@ use watering_position::WateringPosition;
 use watering_schedule::{WateringSchedule, WateringScheduleStep};
 
 fn main() {
+    // init logger
+    logger_config::configure_logger().unwrap();
+
     // /dev/cu.Bluetooth-Incoming-Port
     let sm = SerialManager::new("/dev/ttyACM0", 4800, None, None,
                               None, None, None, None, None, None,

@@ -4,7 +4,7 @@ use itertools::Itertools;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WateringPositionError {
-    #[error("Index error")]
+    #[error("Index error: {0}")]
     IndexError(String),
 }
 

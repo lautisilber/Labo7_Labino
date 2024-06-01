@@ -2,7 +2,7 @@ use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]
 pub enum IntensityConfigError {
-    #[error("new error")]
+    #[error("Error creating IntensityConfig: {0}")]
     NewError(String)
 }
 

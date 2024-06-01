@@ -8,22 +8,28 @@ use serde_derive::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SerialManagerError {
-    #[error("General serial manager error")]
+    #[error("General serial manager error: '{0}'")]
     SerialManagerError(String),
     #[error("Port error")]
     PortError(String),
+    #[error("No ports available")]
+    NoPortError(),
     #[error("serialport library Error")]
     SerialPortLibError(#[from] serialport::Error),
     #[error("io error")]
     IOError(#[from] std::io::Error),
     #[error("SystemTimeError")]
     SystemTimeError(#[from] std::time::SystemTimeError),
-    #[error("Arduino response error")]
-    ArduinoResponseError(String, String),
-    #[error("Arduino parse float error")]
-    ArduinoParseFloatError(#[from] std::num::ParseFloatError),
-    #[error("Arduino parse int error")]
-    ArduinoParseIntError(#[from] std::num::ParseIntError),
+    #[error("Arduino responded to command '{command}' with the error: '{response}'")]
+    ArduinoResponseError {command: String, response: String},
+    #[error("Arduino responded to command '{command}' with an empty string")]
+    ArduinoEmptyResponseError {command: String},
+    #[error("Arduino error on command '{command}': '{description}', Arduino response: {response}")]
+    ArduinoCustomResponseError {command: String, description: String, response: String},
+    #[error("Arduino parse float error on command '{command}': {parse_float_error}")]
+    ArduinoParseFloatError {command: String, parse_float_error: std::num::ParseFloatError},
+    #[error("Arduino parse int error on command '{command}': {parse_int_error}")]
+    ArduinoParseIntError {command: String, parse_int_error: std::num::ParseIntError},
     #[error("Argument error")]
     ArgumentError(String),
 }
@@ -72,11 +78,11 @@ impl SerialManager {
         
         let existing_ports = available_ports()?;
         if existing_ports.is_empty() {
-            return Err(SerialManagerError::PortError("No ports available".to_owned()));
+            return Err(SerialManagerError::NoPortError());
         }
 
         if existing_ports.iter().any(|p| p.port_name == port) {
-            return Err(SerialManagerError::PortError("Port not found".to_owned()));
+            return Err(SerialManagerError::NoPortError());
         }
         
         let serial_port = serialport::new(port, baud_rate)
@@ -85,8 +91,7 @@ impl SerialManager {
             .flow_control(flow_control.unwrap_or(FlowControl::None))
             .parity(parity.unwrap_or(Parity::Even))
             .stop_bits(stop_bits.unwrap_or(StopBits::One))
-            .open()
-            .expect("Failed to open port");
+            .open()?;
 
         if end_char.is_some() {
             // if end_char.unwrap() > 255 {
@@ -164,10 +169,10 @@ impl SerialManager {
         // check that the result wasn't empty or was an error message
         res = res.trim().to_string();
         if res.is_empty() {
-            return Err(SerialManagerError::ArduinoResponseError("Arduino responded with empty string".to_owned(), res));
+            return Err(SerialManagerError::ArduinoEmptyResponseError { command: cmd.to_owned() });
         }
         if res.contains("ERROR") {
-            return Err(SerialManagerError::ArduinoResponseError(format!("Arduino responded with the error: \"{}\"", res), res));
+            return Err(SerialManagerError::ArduinoResponseError { command: cmd.to_owned(), response: res });
         }
 
         return Ok(res);
@@ -194,9 +199,10 @@ impl SerialManager {
     }
 
     pub fn cmd_hx(&mut self, n: u8) -> Result<Vec<f32>> {
-        let res = self.send_command_wait_response_retries(format!("hx {}", n).as_str())?;
+        let cmd = format!("hx {}", n);
+        let res = self.send_command_wait_response_retries(cmd.as_str())?;
         if !res.starts_with('[') || !res.ends_with(']') {
-            return Err(SerialManagerError::ArduinoResponseError(format!("Arduino responded to cmd_hx with a bad format: \"{}\"", res), res));
+            return Err(SerialManagerError::ArduinoCustomResponseError { command: cmd, description: "responded to cmd_hx with a bad format".to_owned(), response: res });
         }
 
         let mut weights: Vec<f32> = Vec::new();
@@ -204,7 +210,7 @@ impl SerialManager {
         for elem in list_elems {
             match elem.trim().parse::<f32>() {
                 Ok(weight) => weights.push(weight),
-                Err(e) => return Err(e.into())
+                Err(e) => return Err(SerialManagerError::ArduinoParseFloatError { command: cmd, parse_float_error: e })
             }
         }
 
@@ -212,11 +218,12 @@ impl SerialManager {
     }
 
     pub fn cmd_hx_single(&mut self, index: u8, n: u8) -> Result<f32> {
-        let res = self.send_command_wait_response_retries(format!("hx_single {} {}", n, index).as_str())?;
+        let cmd = format!("hx_single {} {}", n, index);
+        let res = self.send_command_wait_response_retries(cmd.as_str())?;
         
         return match res.trim().parse::<f32>() {
             Ok(weight) => Ok(weight),
-            Err(e) => return Err(e.into())
+            Err(e) => return Err(SerialManagerError::ArduinoParseFloatError { command: cmd, parse_float_error: e })
         }
     }
 
@@ -224,23 +231,26 @@ impl SerialManager {
         if self.last_hx_n_time.is_none() {
             self.last_hx_n_time = Some(SystemTime::now());
         }
+        let cmd = "hx_n";
         if self.last_hx_n_time.unwrap().elapsed()? > Duration::from_secs(5 * 60) || self.last_hx_n.is_none() {
-            self.last_hx_n = Some(self.send_command_wait_response_retries("ok")?.parse::<usize>()?);
+            self.last_hx_n = Some(self.send_command_wait_response_retries(cmd)?.parse::<usize>().map_err(|e| SerialManagerError::ArduinoParseIntError { command: cmd.to_owned(), parse_int_error: e })?);
         }
 
         return Ok(self.last_hx_n.unwrap());
     }
 
     pub fn cmd_dht(&mut self) -> Result<DHTResult> {
-        let res = self.send_command_wait_response_retries("dht")?;
-        let dht_res: DHTResult = serde_json::from_str(&res).expect(&format!("Couldn't parse dht result. Arduino responded with \"{}\"", res));
+        let cmd = "dht";
+        let res = self.send_command_wait_response_retries(cmd)?;
+        let dht_res: DHTResult = serde_json::from_str(&res).map_err(|e| SerialManagerError::ArduinoCustomResponseError { command: cmd.to_owned(), description: format!("Couldn't parse dht result: serde_json error '{}'", e.to_string()), response: res })?;
         return Ok(dht_res);
     }
 
     pub fn cmd_stepper(&mut self, steps: i32, detach: bool) -> Result<()> {
-        let res = self.send_command_wait_response_retries(&format!("stepper {}{}", steps, (if detach {" 1"} else {""})))?;
+        let cmd = format!("stepper {}{}", steps, (if detach {" 1"} else {""}));
+        let res = self.send_command_wait_response_retries(&cmd)?;
         if res != "OK" {
-            return Err(SerialManagerError::ArduinoResponseError(format!("Error on stepper command. Arduino responded with \"{}\"", res), res));
+            return Err(SerialManagerError::ArduinoCustomResponseError { command: cmd, description: "Error on stepper command".to_owned(), response: res });
         } else {
             return Ok(());
         }
@@ -250,9 +260,10 @@ impl SerialManager {
         if angle < 1 || angle > 179 {
             return Err(SerialManagerError::ArgumentError(format!("Bad argument for cmd_servo. Angle should be in range [1, 179]. It was \"{}\"", angle)));
         }
-        let res = self.send_command_wait_response_retries(&format!("servo {}", angle))?;
-        if res.parse::<u8>()? != angle {
-            return Err(SerialManagerError::ArduinoResponseError(format!("Error on servo command. Arduino responded with \"{}\". (angle was {})", res, angle), res));
+        let cmd = format!("servo {}", angle);
+        let res = self.send_command_wait_response_retries(&cmd)?;
+        if res.parse::<u8>().map_err(|e| SerialManagerError::ArduinoParseIntError { command: cmd.to_owned(), parse_int_error: e })? != angle {
+            return Err(SerialManagerError::ArduinoCustomResponseError { command: cmd, description: format!("Error on servo command (angle was {})", angle), response: res });
         } else {
             return Ok(());
         }
@@ -262,9 +273,10 @@ impl SerialManager {
         if intensity > 100 {
             return Err(SerialManagerError::ArgumentError(format!("Bad argument for cmd_pump. Intensity showld be equal or lower than 100. It was \"{}\"", intensity)));
         }
-        let res = self.send_command_wait_response_retries(&format!("pump {} {}", time_ms, intensity))?;
+        let cmd = format!("pump {} {}", time_ms, intensity);
+        let res = self.send_command_wait_response_retries(&cmd)?;
         if res != "OK" {
-            return Err(SerialManagerError::ArduinoResponseError(format!("Error on pump command. Arduino responded with \"{}\". (time_ms was {} and intensity was {})", res, time_ms, intensity), res));
+            return Err(SerialManagerError::ArduinoCustomResponseError { command: cmd, description: format!("Error on pump command (time_ms was {} and intensity was {})", time_ms, intensity), response: res });
         } else {
             return Ok(());
         }
