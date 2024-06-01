@@ -57,7 +57,7 @@ class Position:
     '''Class for keeping track of each pot's position'''
     stepper: int
     servo: int
-    water_time_cruve: IntensityConfig
+    water_time_curve: IntensityConfig
     water_pwm_curve: IntensityConfig
 
     def __eq__(self, other: object) -> bool:
@@ -199,10 +199,11 @@ class WateringSchedule:
         if self.in_goal(curr_weight):
             return False
         step = self.steps[self._current_step]
-        if step.weight > curr_weight:
-            return True
-        else:
-            return False
+        # if step.weight > curr_weight:
+        #     return True
+        # else:
+        #     return False
+        return step.weight > curr_weight
 
     def update(self, curr_weight: float) -> None:
         '''
@@ -612,7 +613,7 @@ class System:
         sleep(.5)
         self.serial_manager.cmd_servo(position.servo)
 
-        tiempo_ms = position.water_time_cruve(intensity)
+        tiempo_ms = position.water_time_curve(intensity)
         pwm = position.water_pwm_curve(intensity)
         self.serial_manager.cmd_pump(tiempo_ms, pwm)
 

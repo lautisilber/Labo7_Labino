@@ -1,14 +1,12 @@
 use serde_derive::{Deserialize, Serialize};
-use std::io::{Read, Write};
-use std::path::Path;
-use std::fs::File;
 
 use crate::serial_manager::SerialManager;
+use crate::utils::{input, path_is_file, read_file, write_file};
 
 type GenError = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, GenError>;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Balanzas {
     n_balanzas: Option<u8>,
     n_statistics: usize,
@@ -52,20 +50,16 @@ fn mean_and_stdev(v: &Vec<f32>) -> (f32, f32) {
 impl Balanzas {
     pub fn save(&self) -> Result<()> {
         let s = serde_json::to_string(self)?;
-        let mut file = std::fs::OpenOptions::new().write(true).truncate(true).open(&self.save_file)?;
-        file.write_all(s.as_bytes())?;
+        write_file(&self.save_file, &s, true)?;
         return Ok(());
     }
 
     pub fn new(save_file: &str, n_statistics: usize, n_arduino: u8) -> Result<Balanzas>
     {
-        if Path::new(save_file).is_file() {
+        if path_is_file(save_file) {
             // load
-            let mut file = File::open(save_file)?;
-            let mut contents = String::new();
-            file.read_to_string(&mut contents)?;
-    
-            let balanzas: Balanzas = serde_json::from_str(&contents).expect(&format!("Couldn't balanzas. File content was \"{}\"", contents));
+            let contents = read_file(save_file)?;
+            let balanzas: Balanzas = serde_json::from_str(&contents).expect(&format!("Couldn't load balanzas. File content was \"{}\"", contents));
             return Ok(balanzas);
         } else {
             // create new
@@ -80,6 +74,11 @@ impl Balanzas {
                 slope_errors: None
             });
         }
+    }
+
+    pub fn begin(&mut self, serial_manager: &mut SerialManager) -> Result<()> {
+        self.n_balanzas = Some(serial_manager.cmd_hx_n()? as u8);
+        return Ok(());
     }
 
     fn read_single_raw(&self, serial_manager: &mut SerialManager) -> Result<Vec<f32>> {
@@ -215,3 +214,58 @@ impl Balanzas {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct OffsetData {
+    offsets: Vec<f32>,
+    offset_errors: Vec<f32>
+}
+
+pub fn calibrate_balanzas(balanzas: &mut Balanzas, serial_manager: &mut SerialManager, temp_file: Option<&str>) -> Result<()> {
+    let temp_file_offset = match temp_file {
+        Some(s) => s,
+        None => {
+            // let fname_generator = |i: usize| format!(".temp_balanzas_calibration_{}.json", i);
+            // let mut temp_fname = fname_generator(0);
+            // let mut i: usize = 0;
+            // while path_is_file(&temp_fname) {
+            //     i += 1;
+            //     temp_fname = fname_generator(i);
+            // }
+            // &temp_fname
+            ".temp_balanzas_calibration.json"
+        }
+    };
+    if !path_is_file(temp_file_offset) {
+        input(Some("Remove todo el peso de las balanzas y apreta enter"))?;
+        println!("Calibrando offsets...");
+        balanzas.calibrate_offset(serial_manager)?;
+        let offset_data = OffsetData {offsets: balanzas.offsets.clone().unwrap(), offset_errors: balanzas.offset_errors.clone().unwrap()};
+        let s = serde_json::to_string(&offset_data)?;
+        write_file(temp_file_offset, &s, true)?;
+    } else {
+        println!("Usando offsets guardados");
+        let s = read_file(temp_file_offset)?;
+        let offset_data: OffsetData = serde_json::from_str(&s).expect(&format!("Couldn't load saved offset data. File content was \"{}\"", s));
+        balanzas.offsets = Some(offset_data.offsets);
+        balanzas.offset_errors = Some(offset_data.offset_errors);
+    }
+
+    let mut res = input(Some("Introduce un peso conocido en cada balanza. Esribi los pesos y su error en el siguiente formato: (<numero>,<numero>,...)-<numero error>: "))?;
+    res = res.replace(" ", "");
+    res = res.replace("(", "");
+    res = res.replace(")", "");
+    let split_res: Vec<String> = res.split("-").map(str::to_string).collect();
+    if split_res.len() != 2 {
+        return Err(Box::from(format!("Error in inputing the weights: bad pattern. The input was \"{}\"", res)));
+    }
+    let weights: Vec<f32> = split_res[0].split(",")
+                                    .map(|s| s.parse::<f32>().expect("Couldn't parse a number in weights"))
+                                    .collect();
+    let weight_errors: Vec<f32> = vec![split_res[1].parse::<f32>().expect("Couldn't parse the weight errors"); weights.len()];
+    
+    println!("Calibrando slopes...");
+    balanzas.calibrate_slope(serial_manager, &weights, &weight_errors)?;
+    println!("Listo!");
+
+    return Ok(());
+}

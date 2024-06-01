@@ -37,8 +37,8 @@ fn ascii_to_char(code: u8) -> Option<char> {
 
 #[derive(Debug, Deserialize)]
 pub struct DHTResult {
-    hum: f32,
-    temp: f32
+    pub hum: f32,
+    pub temp: f32
 }
 
 impl SerialManager {
@@ -213,8 +213,8 @@ impl SerialManager {
         return Ok(dht_res);
     }
 
-    pub fn cmd_stepper(&mut self, steps: i32) -> Result<()> {
-        let res = self.send_command_wait_response_retries(&format!("stepper {}", steps))?;
+    pub fn cmd_stepper(&mut self, steps: i32, detach: bool) -> Result<()> {
+        let res = self.send_command_wait_response_retries(&format!("stepper {}{}", steps, (if detach {" 1"} else {""})))?;
         if res != "OK" {
             return Err(Box::from(format!("Error on stepper command. Arduino responded with \"{}\"", res)));
         } else {
