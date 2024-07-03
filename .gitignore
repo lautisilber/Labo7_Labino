@@ -1,5 +1,6 @@
 *.csv
 *.json
+*.log*
 
 # Python
 # Byte-compiled / optimized / DLL files
