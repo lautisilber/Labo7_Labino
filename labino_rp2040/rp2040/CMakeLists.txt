@@ -7,6 +7,8 @@ project(${PROJECT_NAME} C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 pico_sdk_init()
 
 add_compile_definitions(PICO_DEFAULT_LED_PIN=22)
@@ -20,7 +22,7 @@ add_executable(${PROJECT_NAME}
 # pull in common dependencies
 target_link_libraries(${PROJECT_NAME} PUBLIC
     pico_stdlib
-    bme280_i2c
+    bme280_handler
 )
 
 
