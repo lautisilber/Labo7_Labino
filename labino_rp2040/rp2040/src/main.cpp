@@ -41,13 +41,6 @@ int main() {
 //         sleep_ms(250);
 //     }
 // #endif
-    bool res = false;
-    while (!res)
-    {
-        // res = bme280_init_main();
-        res = bme280_handler_init(NULL, false, 0, NULL);
-        sleep_ms(50);
-    }
 
     // stepper.begin();
 

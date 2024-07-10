@@ -11,11 +11,13 @@ extern "C" {
 #define BME280_HANDLER_NOT_INIT                         INT8_C(-9)
 #define BME280_HANDLER_NOT_ENOUGH_TIME_BETWEEN_READS    INT8_C(-10)
 
-// for default: bme280_handler_init(NULL, false, 0, NULL);
-bool bme280_handler_init(i2c_inst_t *i2c_dev,
+// for default: bme280_handler_init(&dev, NULL, false, 0, NULL, NULL);
+bool bme280_handler_init(struct bme280_dev *dev,
+                        i2c_inst_t *i2c_dev,
                         bool dont_i2c_init,
                         uint baudrate,
-                        const struct bme280_settings *settings);
+                        const struct bme280_settings *settings,
+                        struct bme280_settings *resulting_settings);
 /*
 *@verbatim
 * Macros                 |   Functionality
@@ -28,9 +30,11 @@ bool bme280_handler_init(i2c_inst_t *i2c_dev,
 * BME280_SEL_ALL_SETTINGS|   To set all settings.
 *@endverbatim
 */
-bool bme280_handler_set_sensor_settings(uint8_t desired_settings,
-                                  const struct bme280_settings *settings);
-bool bme280_handler_get_sensor_settings(struct bme280_settings *settings);
+bool bme280_handler_set_sensor_settings(struct bme280_dev *dev,
+                                        uint8_t desired_settings,
+                                        const struct bme280_settings *settings,
+                                        struct bme280_settings *resulting_settings);
+bool bme280_handler_get_sensor_settings(struct bme280_dev *dev, struct bme280_settings *settings);
 /*
 *@verbatim
 *    sensor_mode       |      Macros
@@ -40,12 +44,11 @@ bool bme280_handler_get_sensor_settings(struct bme280_settings *settings);
 *     3                | BME280_POWERMODE_NORMAL
 *@endverbatim
 */
-bool bme280_handler_set_sensor_mode(uint8_t sensor_mode);
-bool bme280_handler_get_sensor_mode(uint8_t *sensor_mode);
-bool bme280_handler_soft_reset();
-const struct bme280_data* bme280_handler_get_sensor_data();
-bool bme280_handler_cal_meas_delay(uint32_t *max_delay_ms, bool force_update);
-bool bme280_handler_can_measure();
+bool bme280_handler_set_sensor_mode(struct bme280_dev *dev, uint8_t sensor_mode);
+bool bme280_handler_soft_reset(struct bme280_dev *dev);
+bool bme280_handler_get_sensor_data(struct bme280_dev *dev, struct bme280_data *data);
+bool bme280_handler_cal_meas_delay(const struct bme280_dev *dev, const struct bme280_settings *settings,
+                                   uint32_t *max_delay_ms);
 
 #ifdef __cplusplus
 }
