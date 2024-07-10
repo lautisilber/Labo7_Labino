@@ -1,12 +1,11 @@
 set(BME_280_lib_name bme280)
 add_library(${BME_280_lib_name} STATIC
     bme280.c bme280.h
-    bme280_i2c.c bme280_i2c.h
-    bme280_handler.c bme280_handler.h
-    bme280_class.hpp
+    bme280_class.cpp bme280_class.hpp
 )
 target_link_libraries(
     ${BME_280_lib_name}
+    i2c_helper
     hardware_i2c
     pico_stdlib
 )

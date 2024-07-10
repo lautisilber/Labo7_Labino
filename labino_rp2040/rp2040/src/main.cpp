@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 #include "pico/stdlib.h"
-#include "bme280_handler.h"
+#include "bme280_class.hpp"
 
 // Stepper stepper(15, 14, 13, 12, STEPPER_HALF, true, 0, 10000);
 
@@ -20,10 +20,7 @@
 //     return bme280_handler_get_sensor_data();
 // }
 
-class A
-{
-
-};
+BME280_I2C bme280;
 
 
 int main() {
@@ -44,16 +41,19 @@ int main() {
 
     // stepper.begin();
 
-    // uint32_t min_delay_ms;
-    // bme280_handler_cal_meas_delay(&min_delay_ms, false);
+    while (!bme280.begin())
+    {
+        sleep_ms(500);
+    }
 
-    // while (true)
-    // {
-    //     const struct bme280_data *data = bme280_read_main();
-    //     if (data)
-    //     {
-    //         printf("temp: %.2f, press: %.2f, hum: %.2f\n", data->temperature, data->pressure, data->humidity);
-    //     }
-    //     sleep_ms(2*min_delay_ms);
-    // }
+
+    while (true)
+    {
+        const struct bme280_data *data;
+        if (bme280.get_sensor_data(data))
+        {
+            printf("temp: %.2f, press: %.2f, hum: %.2f\n", data->temperature, data->pressure, data->humidity);
+        }
+        sleep_ms(2*bme280.get_measurement_delay());
+    }
 }
