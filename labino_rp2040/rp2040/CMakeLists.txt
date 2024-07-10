@@ -1,39 +1,33 @@
 cmake_minimum_required(VERSION 3.12)
 
-# Pull in SDK (must be before project)
-include("$ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake")
+include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
+set(PROJECT_NAME StomaSenseRP2040)
 
-project(pico_examples C CXX ASM)
+project(${PROJECT_NAME} C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
-    message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
-endif()
-
-set(PICO_EXAMPLES_PATH ${PROJECT_SOURCE_DIR})
-
-# Initialize the SDK
 pico_sdk_init()
 
-include(example_auto_set_url.cmake)
+add_compile_definitions(PICO_DEFAULT_LED_PIN=22)
 
+add_subdirectory(libs)
 
-
-
-
-
-
-add_executable(blink
-        blink.c
-        )
+add_executable(${PROJECT_NAME}
+    src/main.cpp
+)
 
 # pull in common dependencies
-target_link_libraries(blink pico_stdlib)
+target_link_libraries(${PROJECT_NAME} PUBLIC
+    pico_stdlib
+    bme280
+    # fatfs_spi
+    # stepper
+)
 
 # create map/bin/hex file etc.
-pico_add_extra_outputs(blink)
+pico_add_extra_outputs(${PROJECT_NAME})
 
-# add url via pico_set_program_url
-example_auto_set_url(blink)
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
