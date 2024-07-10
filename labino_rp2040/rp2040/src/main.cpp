@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "bme280_class.hpp"
+#include "stepper.hpp"
 
 // Stepper stepper(15, 14, 13, 12, STEPPER_HALF, true, 0, 10000);
 
@@ -21,7 +22,7 @@
 // }
 
 BME280_I2C bme280;
-
+Stepper stepper(true, 0, 1000);
 
 int main() {
     stdio_init_all();
@@ -41,19 +42,25 @@ int main() {
 
     // stepper.begin();
 
+    stepper.begin();
     while (!bme280.begin())
     {
         sleep_ms(500);
     }
 
 
-    while (true)
+    bool alternate = false;
+    for (;;)
     {
         const struct bme280_data *data;
         if (bme280.get_sensor_data(data))
         {
             printf("temp: %.2f, press: %.2f, hum: %.2f\n", data->temperature, data->pressure, data->humidity);
         }
-        sleep_ms(2*bme280.get_measurement_delay());
+
+        stepper.move_steps_async(1000 + 500 * (2*alternate - 1));
+        alternate != alternate;
+
+        sleep_ms(5000);
     }
 }

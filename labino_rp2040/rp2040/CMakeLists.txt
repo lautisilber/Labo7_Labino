@@ -23,7 +23,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     pico_stdlib
     bme280
     # fatfs_spi
-    # stepper
+    stepper
 )
 
 # create map/bin/hex file etc.
