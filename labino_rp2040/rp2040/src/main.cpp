@@ -5,10 +5,13 @@
  */
 
 #include <stdio.h>
-#include "bme280_defs.h"
 #include "pico/stdlib.h"
 #include "bme280_handler.h"
+#include "stepper.hpp"
+// #include "FatFS_SPI.h"
 #include "pico/time.h"
+
+Stepper stepper(15, 14, 13, 12, STEPPER_HALF, true, 0, 10000);
 
 inline bool bme280_init_main()
 {
@@ -22,6 +25,7 @@ inline const struct bme280_data *bme280_read_main()
 
 
 int main() {
+    stdio_init_all();
 // #ifndef PICO_DEFAULT_LED_PIN
 // #warning blink example requires a board with a regular LED
 // #else
@@ -41,6 +45,8 @@ int main() {
         res = bme280_init_main();
         sleep_ms(50);
     }
+
+    stepper.begin();
 
     uint32_t min_delay_ms;
     bme280_handler_cal_meas_delay(&min_delay_ms, false);

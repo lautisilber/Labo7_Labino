@@ -1,12 +1,15 @@
-export PICO_SDK_PATH=/Users/lautarosilbergleit/dev/rpi_pico/pico-sdk
-export PICO_TOOLCHAIN_PATH=/Applications/ArmGNUToolchain/12.2.rel1/arm-none-eabi
+OLD_DIRECTORY="$(realpath "$pwd")"
+SCRIPT_PATH="$(realpath "$0")"
+ROOT_PATH="$(dirname "$SCRIPT_PATH")" # get this script's full path
 
-BUILD_DIR="build"
-if [ ! -d $BUILD_DIR ];
+export PICO_SDK_PATH="$ROOT_PATH/pico-sdk"
+
+BUILD_DIR="$ROOT_PATH/build"
+if [ ! -d "$BUILD_DIR" ];
 then
-    mkdir $BUILD_DIR
+    mkdir "$BUILD_DIR"
 fi
-cd $BUILD_DIR
+cd "$BUILD_DIR"
 cmake ../
 make -j4
-cd ..
+cd "$OLD_DIRECTORY"
