@@ -1,12 +1,11 @@
-set(BME_280_lib_name bme280)
-add_library(${BME_280_lib_name} STATIC
+add_library(bme280 STATIC
     bme280.c bme280.h
     bme280_class.cpp bme280_class.hpp
 )
 target_link_libraries(
-    ${BME_280_lib_name}
+    bme280
     i2c_helper
     hardware_i2c
     pico_stdlib
 )
-target_include_directories(${BME_280_lib_name} PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(bme280 PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")

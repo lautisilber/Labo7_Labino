@@ -1,11 +1,12 @@
-set(stepper_lib_name stepper)
-add_library(${stepper_lib_name} STATIC
+
+add_library(stepper STATIC
     stepper.cpp stepper.hpp
 )
 target_link_libraries(
-    ${stepper_lib_name}
+    stepper
     pico_stdlib
     hardware_gpio
     pico_time
+    pico_multicore
 )
-target_include_directories(${stepper_lib_name} PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(stepper PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")

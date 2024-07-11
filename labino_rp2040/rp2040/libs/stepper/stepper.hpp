@@ -14,6 +14,8 @@ enum StepType : uint8_t
     STEPPER_HALF
 };
 
+typedef void (*stepper_async_end_callback_t)(int32_t old_position, int32_t new_position);
+
 class Stepper
 {
 private:
@@ -44,12 +46,16 @@ public: // async data (shouldn't be accessed by user)
         uint8_t n_step_variants;
         const bool (*step_table)[4];
         //
+        stepper_async_end_callback_t cb;
         bool executing;
+        // data for callback
+        int32_t starting_position;
+        int32_t end_position;
     };
     volatile struct AsyncData _async_data = {0};
 private:
     repeating_timer_t _async_timer;
-    void setup_async_data(int32_t steps, bool clockwise);
+    void setup_async_data(int32_t steps, bool clockwise, stepper_async_end_callback_t cb);
 
 public:
     Stepper(bool clockwise_is_forward, int32_t min_position, int32_t max_position,
@@ -64,12 +70,10 @@ public:
     bool move_steps_blocking(int32_t steps);
     bool move_to_position_blocking(int32_t next_position);
 
-    bool move_steps_async(int32_t steps);
-    bool move_to_position_async(int32_t next_position);
+    bool move_steps_async(int32_t steps, stepper_async_end_callback_t callback=nullptr);
+    bool move_to_position_async(int32_t next_position, stepper_async_end_callback_t callback=nullptr);
 
     inline int32_t get_current_position() const { return _current_position; }
-
-
 };
 
 #endif /* STEPPER_HPP */

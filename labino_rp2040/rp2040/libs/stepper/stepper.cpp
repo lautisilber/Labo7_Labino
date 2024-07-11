@@ -1,5 +1,6 @@
 #include "stepper.hpp"
 #include "hardware/gpio.h"
+#include "pico/multicore.h"
 
 #define STEPPER_ABS(x) ((x) < 0 ? -(x) : (x))
 
@@ -141,7 +142,11 @@ static bool stepper_clockwise_async_callback(repeating_timer_t *rt)
         ++async_data->last_step;
     }
 
-    return async_data->last_step >= async_data->total_steps;
+    bool repeat = async_data->last_step < async_data->total_steps;
+    if (!repeat)
+        if (async_data->cb)
+            async_data->cb(async_data->starting_position, async_data->end_position);
+    return repeat;
 }
 static bool stepper_anticlockwise_async_callback(repeating_timer_t *rt)
 {
@@ -158,12 +163,16 @@ static bool stepper_anticlockwise_async_callback(repeating_timer_t *rt)
         ++async_data->last_step;
     }
 
-    return async_data->last_step >= async_data->total_steps;
+    bool repeat = async_data->last_step < async_data->total_steps;
+    if (!repeat)
+        if (async_data->cb)
+            async_data->cb(async_data->starting_position, async_data->end_position);
+    return repeat;
 }
 
-void Stepper::setup_async_data(int32_t steps, bool clockwise)
+void Stepper::setup_async_data(int32_t steps, bool clockwise, stepper_async_end_callback_t cb)
 {
-    if (_async_data.executing) return; // this should never happen
+    if (_async_data.executing || !is_position_allowed(_current_position + steps)) return; // this should never happen
     _async_data.pin_1 = _pin_1;
     _async_data.pin_2 = _pin_2;
     _async_data.pin_3 = _pin_3;
@@ -177,9 +186,12 @@ void Stepper::setup_async_data(int32_t steps, bool clockwise)
 
     // if it's anticlockwise, we should start at the las microstep and go backward
     _async_data.last_microstep = (!clockwise) * (_async_data.n_step_variants - 1);
+    _async_data.cb = cb;
+    _async_data.starting_position = _current_position;
+    _async_data.end_position = _current_position + steps;
 }
 
-bool Stepper::move_steps_async(int32_t steps)
+bool Stepper::move_steps_async(int32_t steps, stepper_async_end_callback_t callback)
 {
     // returns true if the stepper movement began, false if it couldn't be started due to
     // - position not allowed
@@ -192,7 +204,7 @@ bool Stepper::move_steps_async(int32_t steps)
     if (!is_position_allowed(_current_position + steps)) return false;
     bool clockwise = rotation_should_be_clockwise(steps);
 
-    setup_async_data(steps, clockwise);
+    setup_async_data(steps, clockwise, callback);
 
     _async_data.executing = true;
     bool res;
@@ -208,10 +220,10 @@ bool Stepper::move_steps_async(int32_t steps)
 
     return res;
 }
-bool Stepper::move_to_position_async(int32_t next_position)
+bool Stepper::move_to_position_async(int32_t next_position, stepper_async_end_callback_t callback)
 {
     int32_t steps = next_position - _current_position;
-    return move_steps_async(steps);
+    return move_steps_async(steps, callback);
 }
 
 

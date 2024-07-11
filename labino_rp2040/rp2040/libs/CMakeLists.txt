@@ -1,4 +1,7 @@
 add_subdirectory(bme280)
 add_subdirectory(i2c_helper)
-# add_subdirectory(fatfs_spi)
 add_subdirectory(stepper)
+add_subdirectory(timer_interrupts_helper)
+add_subdirectory(hx711_driver)
+add_subdirectory(hx711_mux)
+# add_subdirectory(fatfs_spi)

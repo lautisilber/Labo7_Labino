@@ -1,6 +1,11 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.14)
 
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+
+# Set env variable 'PICO_SDK_PATH' to the local Pico SDK
+# Comment out the set() if you have a global copy of the
+# SDK set and $PICO_SDK_PATH defined in your $PATH
+# set(ENV{PICO_SDK_PATH} "${CMAKE_SOURCE_DIR}/pico-sdk")
 
 set(PROJECT_NAME StomaSenseRP2040)
 
@@ -8,6 +13,7 @@ project(${PROJECT_NAME} C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+# Initialise the Pico SDK
 pico_sdk_init()
 
 add_compile_definitions(PICO_DEFAULT_LED_PIN=22)
@@ -22,8 +28,8 @@ add_executable(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} PUBLIC
     pico_stdlib
     bme280
-    # fatfs_spi
     stepper
+    hx711_mux
 )
 
 # create map/bin/hex file etc.
