@@ -1,0 +1,3 @@
+[submodule "labino_rp2040/rp2040/pico-sdk"]
+	path = labino_rp2040/rp2040/pico-sdk
+	url = git@github.com:raspberrypi/pico-sdk.git
