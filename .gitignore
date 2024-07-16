@@ -1,6 +1,3 @@
-# ignore github actions for now
-.github/workflows/*
-
 *.csv
 *.json
 *.log*

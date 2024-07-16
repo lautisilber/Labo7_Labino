@@ -8,5 +8,6 @@ target_link_libraries(
     pico_time
     hx711_driver
     timer_interrupts_helper
+    utils
 )
 target_include_directories(hx711_mux PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
