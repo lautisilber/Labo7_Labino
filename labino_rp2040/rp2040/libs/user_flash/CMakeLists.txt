@@ -1,0 +1,11 @@
+add_library(user_flash STATIC
+user_flash.c user_flash.h user_flash_class.hpp
+)
+target_link_libraries(
+    user_flash
+    pico_stdlib
+    hardware_flash
+    hardware_sync
+    panic
+)
+target_include_directories(user_flash PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")

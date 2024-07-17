@@ -1,9 +1,7 @@
 #include "utils.hpp"
-// #include <algorithm>
 #include <numeric>
-// #include <iterator>
 #include <math.h>
-#include "pico/divider.h"
+#include <algorithm>
 
 
 // CHAR_BIT: found in <limits.h>. The size in bits of type is simply CHAR_BIT * sizeof(type)
@@ -111,5 +109,56 @@ size_t remove_by_mask(T *arr, bool *mask, size_t len)
         }
     }
 
+    return new_len;
+}
+
+
+template <typename T_SAMPLES, typename T_RESULT>
+size_t interquartile_range_filter(T_SAMPLES *arr, size_t len, T_RESULT mult)
+{
+    // TODO: test this
+
+    // this filters outliers by interquartile range filtering
+    // all happens in-place, and the new filtered array has the same
+    // starting pointer, but is same length or shorter. The new length of
+    // the filtered array is returned by the function
+
+    const T_SAMPLES* begin = arr;
+    const T_SAMPLES* end = begin + len;
+    
+    // find quartiles
+    const size_t q1_index = len / 4;
+    const size_t q2_index = len / 2;
+    const size_t q3_index = q1_index + q2_index; // = 3 * len / 4 = 2*len / 4 + len / 4 = len / 2 + len / 4 = q2_index + q1_index
+
+    // std::neth_element(begin, nth, end)
+    // Rearranges the elements in the range [first,last), in such a way that the element
+    // at the nth position is the element that would be in that position in a sorted sequence.
+    // std::nth_element is ~O(n) whereas std::sort  is ~O(n logn), so it's actually better to use nth_element
+    // https://stackoverflow.com/questions/11964552/finding-quartiles
+    std::nth_element(begin, begin+q1_index, end);
+    std::nth_element(begin+q1_index+1, begin+q2_index, end);
+    std::nth_element(begin+q2_index+1, begin+q3_index, end);
+    T_RESULT q1 = static_cast<T_RESULT>(arr[q1_index]);
+    T_RESULT q2 = static_cast<T_RESULT>(arr[q2_index]);
+    T_RESULT q3 = static_cast<T_RESULT>(arr[q3_index]);
+
+    // interquantile range
+    T_RESULT iqr = q3 - q1;
+
+    // define lower and upper bounds
+    T_RESULT lower_bound = q1 - (mult * iqr);
+    T_RESULT upper_bound = q3 + (mult * iqr);
+
+    // filter the data based on the bounds
+    // we could avoid using remove_if if the list were already sorted. However, remove_if is ~O(n)
+    // and 4*n < n*log(n), so we are still going faster (for any n > 24)
+    auto outside_range = [&lower_bound, &upper_bound](T_SAMPLES val){ 
+        const T_RESULT val_cast = static_cast<T_RESULT>(val);
+        return val_cast < lower_bound || val_cast > upper_bound;
+    };
+    T_SAMPLES* new_end = std::remove_if(begin, end, outside_range);
+
+    size_t new_len = new_end - begin;
     return new_len;
 }

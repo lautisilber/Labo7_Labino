@@ -38,4 +38,7 @@ bool calc_mean_stdev_welford_finish(struct WelfordAggregate<T_RESULT> *existing_
 template <typename T>
 size_t remove_by_mask(T *arr, bool *mask, size_t len);
 
+template <typename T_SAMPLES, typename T_RESULT>
+size_t interquartile_range_filter(T_SAMPLES *arr, size_t len, T_RESULT mult);
+
 #endif /* UTILS_H */

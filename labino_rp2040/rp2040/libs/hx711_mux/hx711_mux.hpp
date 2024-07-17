@@ -1,12 +1,10 @@
 #ifndef HX711_H
 #define HX711_H
 
-#include "pico/stdlib.h"
-#include "hardware/gpio.h"
 #include "hx711_driver.h"
-#include "timer_interrupts_helper.h"
-#include "utils.hpp"
-#include <string.h>
+#include "user_flash_class.hpp"
+#include <pico/stdlib.h>
+#include <assert.h>
 
 
 #define HX711_MUX_N_PINS                                          4
@@ -15,10 +13,20 @@
 
 #define HX711_MUX_MAX_ITERATIONS_BEFORE_USING_OFFLINE_MEAN_STDEV  256
 
+#define HX711_DEFAULT_FLASH_USER                                  0
+
 struct HX711MuxCalibration
 {
-    float offset, slope;  
+    // sizeof(this) = 20
+    float offset, slope, offset_error, slope_error;
+    bool offset_calib_state=false, slope_calib_state=false;
 };
+
+#define HX711_MUX_USER_FLASH_LENGTH sizeof(struct HX711MuxCalibration) * HX711_MUX_MAX_MODULES
+static_assert(
+    HX711_MUX_USER_FLASH_LENGTH <= FLASH_USER_SAVE_BYTES_SIZE,
+    "Not enough flash user space to save all calibrations!"
+);
 
 struct HX711ResponseRaw
 {
@@ -32,173 +40,60 @@ struct HX711ResponseAvg
     float mean;
     float stdev;
     size_t count;
+    size_t n_missed_reads;
+    size_t n_filtered_reads;
 };
 
-class HX711Mux
+struct HX711ResponseAvgCalib //: HX711ResponseAvg
+{
+    bool success;
+    float mean;
+    float stdev;
+    size_t count;
+    size_t n_missed_reads;
+    size_t n_filtered_reads;
+};
+
+class HX711Mux : UserFlashBase
 {
 private:
-    uint _mux_pins[HX711_MUX_N_PINS];
-    HX711MuxCalibration _calibrations[HX711_MUX_MAX_MODULES];
-    uint32_t _timeout_ms;
-    uint8_t _current_address;
-
     struct HX711 _hx711;
 
+    uint _mux_pins[HX711_MUX_N_PINS];
+    struct HX711MuxCalibration _calibrations[HX711_MUX_MAX_MODULES];
+    uint32_t _timeout_ms;
+    bool _connected_addresses[HX711_MUX_N_PINS] = {false};
+    uint8_t _current_address;
+
 private:
-    inline bool is_address_available(uint8_t address)
-    {
-        return address < HX711_MUX_MAX_MODULES;
-    }
-
-    bool set_address(uint8_t address)
-    {
-        if (!is_address_available(address)) return false;
-
-        bool binary[get_bit_size<uint8_t>()];
-        dec_2_bin<uint8_t>(address, binary);
-
-        uint32_t mask = 0;
-        for (uint8_t i = 0; i < HX711_MUX_N_PINS; i++)
-        {
-            if (binary[i])
-                mask |= (1 << _mux_pins[i]);
-        }
-
-        gpio_put_masked(mask, true);
-    }
-
-    bool read_raw_single_dont_change_address(int32_t *raw)
-    {
-        timer_disable_irq();
-        return hx711_read(&_hx711, raw, _timeout_ms);
-        timer_enable_irq();
-    }
-
-    void read_avg_single_online_dont_change_address(struct HX711ResponseAvg *res, size_t n)
-    {
-        // int32_t raws[n] = {0};
-        // bool raw_successes[n] = {false};
-
-        // for (size_t i = 0; i < n; ++i)
-        // {
-        //     bool s = read_raw_single_dont_change_address(&raws[i]);
-        //     if (s)
-        //     {
-        //         raw_successes[i] = true;
-        //     }
-        // }
-
-        // size_t n_successes = remove_by_mask(raws, raw_successes, n);
-
-        int32_t raw = 0;
-        int32_t raws[n] = {0};
-        size_t n_successes = 0;
-
-        for (size_t i = 0; i < n; ++i)
-        {
-            if (read_raw_single_dont_change_address(&raw))
-            {
-                raws[n_successes++] = raw;
-            }
-        }
-
-        calc_mean_stdev_online<int32_t, float>(raws, n_successes, &res->mean, &res->stdev);
-        res->count = n_successes;
-        res->success = true;
-    }
-
-    void read_avg_single_offline_dont_change_address(struct HX711ResponseAvg *res, size_t n)
-    {
-        struct WelfordAggregate<float> welf_agg = {.count=0, .mean=0.0f, .m2=0.0f};
-        int32_t raw;
-
-        for (size_t i = 0; i < n; ++i)
-        {
-            if (read_raw_single_dont_change_address(&raw))
-            {
-                calc_mean_stdev_welford<int32_t, float>(&welf_agg, raw);
-            }
-        }
-
-        res->success = calc_mean_stdev_welford_finish<int32_t, float>(&welf_agg, &res->mean, &res->stdev);
-        res->count = welf_agg.count;
-    }
+    inline bool is_address_available(uint8_t address);
+    bool is_address_connected(uint8_t address);
+    bool set_address(uint8_t address);
+    bool read_raw_single_dont_change_address(int32_t *raw);
+    void read_avg_single_online_dont_change_address(struct HX711ResponseAvg *res, size_t n);
+    void read_avg_single_offline_dont_change_address(struct HX711ResponseAvg *res, size_t n);
 
 public:
-    HX711Mux(uint dout_pin, uint pd_sck_pin, uint mux_pins[HX711_MUX_N_PINS], enum HX711Gain gain, uint32_t timeout_ms)
-        : _hx711{.dout=dout_pin, .pd_sck=pd_sck_pin, .gain=gain}, _timeout_ms(timeout_ms)
-    {
-        memcpy(_mux_pins, mux_pins, HX711_MUX_N_PINS*sizeof(uint));
-    }
+    HX711Mux(uint dout_pin, uint pd_sck_pin, uint mux_pins[HX711_MUX_N_PINS], enum HX711Gain gain, uint32_t timeout_ms, uint32_t flash_user_index=HX711_DEFAULT_FLASH_USER);
+    HX711Mux(uint dout_pin, uint pd_sck_pin, uint mux_pins[HX711_MUX_N_PINS], enum HX711Gain gain, uint32_t timeout_ms, bool default_addresses_states[HX711_MUX_MAX_MODULES], uint32_t flash_user_index=HX711_DEFAULT_FLASH_USER);
 
-    void all_power_down()
-    {
-        hx711_power_down(&_hx711);
-        for (uint8_t i = HX711_MUX_MAX_MODULES; i >= 0; i--)
-        {
-            set_address(i);
-            sleep_us(HX711_MUX_MULTIPLEXER_TRANSITION_TIME_US);
-        }
-    }
+    bool set_address_state(uint8_t address, bool connected);
+    bool set_addresses_state(uint8_t *addresses, uint8_t n_addresses, bool connected);
 
-    void all_power_up()
-    {
-        hx711_power_up(&_hx711);
-        for (uint8_t i = HX711_MUX_MAX_MODULES; i >= 0; i--)
-        {
-            set_address(i);
-            sleep_us(HX711_MUX_MULTIPLEXER_TRANSITION_TIME_US);
-        }
-    }
+    void all_power_down();
+    void all_power_up();
 
-    void begin(bool begin_power_down)
-    {
-        // mask representing the only relevant in pin: the dout pin
-        uint32_t in_mask  = (1 << _hx711.dout);
-        // create mask for all pins that are output = pd_sck and all mux pins
-        uint32_t out_mask = (1 << _hx711.pd_sck);
-        for (uint8_t i = 0; i < HX711_MUX_N_PINS; i++)
-            out_mask |= (1 << _mux_pins[i]);
+    void begin(bool begin_power_down);
 
-        // initialize pins accourdingly
-        gpio_init_mask(out_mask || in_mask);
-        gpio_set_dir_out_masked(out_mask);
-        gpio_set_dir_in_masked(in_mask);
+    struct HX711ResponseRaw read_raw_single(uint8_t address);
+    struct HX711ResponseAvg read_avg_single(uint8_t address, size_t n);
+    struct HX711ResponseAvgCalib read_calib_single(uint8_t address, size_t n);
 
-        // set the signal to be the corresponding begin state
-        if (begin_power_down)
-            all_power_down();
-        else
-            all_power_up();
-    }
+    bool calibrate_offset_single(uint8_t address, size_t n);
+    bool calibrate_slope_single(uint8_t address, size_t n, float weight, float weight_error);
 
-    struct HX711ResponseRaw read_raw_single(uint8_t address)
-    {
-        struct HX711ResponseRaw res = {.success=false, .result=0};
-
-        if (!set_address(address)) return res;
-        res.success = read_raw_single_dont_change_address(&res.result);
-        return res;
-    }
-
-    struct HX711ResponseAvg read_avg_single(uint8_t address, size_t n)
-    {
-        struct HX711ResponseAvg res = {.success=false, .mean=0.0, .stdev=0.0, .count=0};
-        
-        if (!set_address(address))
-            return res;
-
-        if (n > HX711_MUX_MAX_ITERATIONS_BEFORE_USING_OFFLINE_MEAN_STDEV)
-        {
-            read_avg_single_online_dont_change_address(&res, n);
-        }
-        else
-        {
-            read_avg_single_offline_dont_change_address(&res, n);
-        }
-
-        return res;
-    }
+    bool save_calibrations_to_flash();
+    bool load_calibrations_from_flash();
 };
 
 

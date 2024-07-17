@@ -7,7 +7,8 @@ target_link_libraries(
     hardware_gpio
     pico_time
     hx711_driver
-    timer_interrupts_helper
+    hardware_sync
     utils
+    user_flash
 )
 target_include_directories(hx711_mux PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
