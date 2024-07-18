@@ -1,5 +1,5 @@
 add_library(user_flash STATIC
-user_flash.c user_flash.h user_flash_class.hpp
+user_flash.c user_flash.h user_flash_class.cpp user_flash_class.hpp
 )
 target_link_libraries(
     user_flash

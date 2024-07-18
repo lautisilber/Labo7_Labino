@@ -198,7 +198,19 @@ struct HX711ResponseAvg HX711Mux::read_avg_single(uint8_t address, size_t n)
     if (!set_address(address))
         return res;
 
-    if (n > HX711_MUX_MAX_ITERATIONS_BEFORE_USING_OFFLINE_MEAN_STDEV)
+    if (n == 0) return res;
+    else if (n == 1)
+    {
+        int32_t raw;
+        if (read_raw_single_dont_change_address(&raw))
+        {
+            res.count = 1;
+            res.success = true;
+            res.mean = (float)raw;
+            res.stdev = 0.0f;
+        }
+    }
+    else if (n <= HX711_MUX_MAX_ITERATIONS_BEFORE_USING_OFFLINE_MEAN_STDEV)
     {
         read_avg_single_online_dont_change_address(&res, n);
     }
@@ -221,25 +233,10 @@ struct HX711ResponseAvgCalib HX711Mux::read_calib_single(uint8_t address, size_t
     res_calib.n_filtered_reads = res_avg.n_filtered_reads;
     if (!res_avg.success) return res_calib;
 
-    // r = raw value, s = slope, o = offset
-    //
-    // calibrated mean = r * s + o
-    // calibrated stdev = sqrt( o_err^2 + r^2 * s_err^2 + s^2 * r_err^2 )
-
-    const float r      = res_avg.mean;
-    const float r2     = r*r;
-    const float r_err  = res_avg.stdev;
-    const float r_err2 = r_err * r_err;
-    const float s      = _calibrations[address].slope;
-    const float s2     = s * s;
-    const float s_err  = _calibrations[address].slope_error;
-    const float s_err2 = s_err * s_err;
-    const float o      = _calibrations[address].offset;
-    const float o_err  = _calibrations[address].offset_error;
-    const float o_err2 = o_err * o_err;
-
-    res_calib.mean  = r * s + o;
-    res_calib.stdev = sqrt( o_err2 + r2*s_err2 + s2 * r_err2 );
+    linear_error_propagation<float>(&res_calib.mean, &res_calib.stdev,
+                                    res_avg.mean, res_avg.stdev,
+                                    _calibrations[address].slope, _calibrations[address].slope_error,
+                                    _calibrations[address].offset, _calibrations[address].offset_error);
 
     return res_calib;
 }

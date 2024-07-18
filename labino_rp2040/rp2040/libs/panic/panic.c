@@ -38,6 +38,23 @@ void __attribute__ ((noreturn)) panic(const char *format, ...)
     reset();
 }
 
+void __attribute__ ((noreturn)) panic_pre_main(const char *format, ...)
+{
+    stdio_init_all();
+    
+    // from https://stackoverflow.com/questions/4339412/how-to-use-va-args-inside-a-c-function-instead-of-macro
+    #ifndef NO_DEBUG
+    va_list args;
+
+    va_start(args, format);
+    printf(format, args);
+    va_end(args);
+    #endif
+
+    sleep_long(5);
+    reset();
+}
+
 void warn(const char *format, ...)
 {
     // from https://stackoverflow.com/questions/4339412/how-to-use-va-args-inside-a-c-function-instead-of-macro

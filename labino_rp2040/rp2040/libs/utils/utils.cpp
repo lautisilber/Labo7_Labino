@@ -162,3 +162,58 @@ size_t interquartile_range_filter(T_SAMPLES *arr, size_t len, T_RESULT mult)
     size_t new_len = new_end - begin;
     return new_len;
 }
+
+
+template <typename T>
+void linear_error_propagation(T *mean, T*stdev, T r, T r_stdev, T s, T s_stdev, T o, T o_stdev)
+{
+    // v = r * s + o
+    // v_stdev = sqrt( o_stdev^2 + s^2*r_stdev^2 + s_stdev^2*r^2 )
+    *mean = r * s + o;
+    *stdev = sqrt( o_stdev*o_stdev + (s*s)*(r_stdev*r_stdev) + (s_stdev*s_stdev)*(r*r) );
+}
+
+template <typename T>
+void exponential_error_propagation(T *mean, T*stdev, T r, T r_stdev, T a, T a_stdev, T b, T b_stdev, T c, T c_stdev, T d, T d_stdev)
+{
+    // v = a * exp(v * b + c) + d
+    // v_stdev = sqrt( d_stdev^2 + a_stdev^2*exp(2*c + 2*b*r) +
+    //                 a^2*exp(2*c + 2*b*r) * (c_stdev^2 + b^2*r_stdev^2 + b_stdev^2*r^2) )
+
+    const T a2 = a*a;
+    const T b2 = b*b;
+    const T r2 = r*r;
+    const T a_stdev2 = a_stdev*a_stdev;
+    const T b_stdev2 = b_stdev*b_stdev;
+    const T c_stdev2 = c_stdev*c_stdev;
+    const T d_stdev2 = d_stdev*d_stdev;
+    const T r_stdev2 = r_stdev*r_stdev;
+    const T ex       = exp(2*c + 2*b*r);
+    
+    *mean = a * exp(r*b + c) + d;
+    *stdev = sqrt( d_stdev2 + ex * (a_stdev2 + a2 * (c_stdev2 + b2*r_stdev2 + b_stdev2*r2)) );
+}
+
+template <typename T>
+void logarithm_error_propagation(T *mean, T*stdev, T r, T r_stdev, T a, T a_stdev, T b, T b_stdev, T c, T c_stdev, T d, T d_stdev)
+{
+    // v = a * ln(r * b + c) + d
+    // v_stdev = sqrt( d_stdev^2 + (a^2 * (c_stdev^2 + b^2*r_stdev^2 + b_stdev^2*r^2)) / ) )
+    //                 ((c + b*r)^2) + a_stdev^2 * ln(c + b*r)^2
+
+    const T rbc      = r*b + c;
+    const T rbc2     = rbc*rbc;
+    const T l        = log(rbc);
+    const T l2       = l*l;
+    const T a2       = a*a;
+    const T b2       = b*b;
+    const T r2       = r*r;
+    const T a_stdev2 = a_stdev*a_stdev;
+    const T b_stdev2 = b_stdev*b_stdev;
+    const T c_stdev2 = c_stdev*c_stdev;
+    const T d_stdev2 = d_stdev*d_stdev;
+    const T r_stdev2 = r_stdev*r_stdev;
+
+    *mean = a * l + d;
+    *stdev = sqrt( d_stdev2 + ( (a2 * (c_stdev2 + b2*r_stdev2 + b_stdev2+r2)) / rbc) + a_stdev2 * l2 );
+}

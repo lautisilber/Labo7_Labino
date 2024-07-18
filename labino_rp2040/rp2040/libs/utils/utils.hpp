@@ -41,4 +41,15 @@ size_t remove_by_mask(T *arr, bool *mask, size_t len);
 template <typename T_SAMPLES, typename T_RESULT>
 size_t interquartile_range_filter(T_SAMPLES *arr, size_t len, T_RESULT mult);
 
+
+
+template <typename T>
+void linear_error_propagation(T *mean, T*stdev, T r, T r_stdev, T s, T s_stdev, T o, T o_stdev);
+
+template <typename T>
+void exponential_error_propagation(T *mean, T*stdev, T r, T r_stdev, T a, T a_stdev, T b, T b_stdev, T c, T c_stdev, T d, T d_stdev);
+
+template <typename T>
+void logarithm_error_propagation(T *mean, T*stdev, T r, T r_stdev, T a, T a_stdev, T b, T b_stdev, T c, T c_stdev, T d, T d_stdev);
+
 #endif /* UTILS_H */

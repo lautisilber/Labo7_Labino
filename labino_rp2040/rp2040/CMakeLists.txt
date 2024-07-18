@@ -30,6 +30,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     bme280
     stepper
     hx711_mux
+    analog_sensor
 )
 
 # create map/bin/hex file etc.

@@ -18,6 +18,7 @@ extern "C" {
 
 inline void  __attribute__ ((noreturn)) reset();
 void __attribute__ ((noreturn)) panic(const char *format, ...);
+void __attribute__ ((noreturn)) panic_pre_main(const char *format, ...);
 void warn(const char *format, ...);
 
 #ifdef __cplusplus
