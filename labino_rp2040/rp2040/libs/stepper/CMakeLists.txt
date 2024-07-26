@@ -9,4 +9,4 @@ target_link_libraries(
     pico_time
     pico_multicore
 )
-target_include_directories(stepper PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(stepper PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

@@ -11,4 +11,4 @@ target_link_libraries(
     utils
     user_flash
 )
-target_include_directories(hx711_mux PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(hx711_mux PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

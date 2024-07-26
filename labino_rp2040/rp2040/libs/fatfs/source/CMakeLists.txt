@@ -7,4 +7,4 @@ add_library(${fatfs_lib_name} STATIC
     ffunicode.c
 )
 
-target_include_directories(${fatfs_lib_name} PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(${fatfs_lib_name} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

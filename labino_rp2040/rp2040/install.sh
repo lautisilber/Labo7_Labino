@@ -19,23 +19,5 @@ if [[ "$OSTYPE" =~ ^linux ]]; then
     sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
 fi
 
-# clone pico-sdk
-if [ ! -d "$pico-sdk" ]; then
-    INSIDE_GIT_REPO="$(git rev-parse --is-inside-work-tree 2>/dev/null)"
-    if [ "$inside_git_repo" ]; then
-        # inside git repo 
-        git submodule add https://github.com/raspberrypi/pico-sdk.git
-    else
-        # not in git repo
-        git clone https://github.com/raspberrypi/pico-sdk.git
-    fi
-    cd pico-sdk
-    PICO_SDK_PATH_="$(pwd)"
-    git submodule update --init
-fi
-
 
 cd $OLD_DIRECTORY
-
-echo "Paste the following in you .vscode/settings.json file:\n"
-echo "{\n    \"cmake.environment\": {\n        \"PICO_SDK_PATH\":\"$PICO_SDK_PATH_\"\n    },\n    \"cmake.generator\": \"Unix Makefiles\"\n}"

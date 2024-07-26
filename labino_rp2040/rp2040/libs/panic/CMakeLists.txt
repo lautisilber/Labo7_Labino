@@ -5,5 +5,6 @@ target_link_libraries(
     panic
     pico_stdlib
     hardware_watchdog
+    debug_helper
 )
-target_include_directories(panic PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(panic PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

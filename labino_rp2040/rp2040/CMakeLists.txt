@@ -20,6 +20,11 @@ add_compile_definitions(PICO_DEFAULT_LED_PIN=22)
 
 add_subdirectory(libs)
 
+get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+foreach(dir ${dirs})
+  message(STATUS "dir='${dir}'")
+endforeach()
+
 add_executable(${PROJECT_NAME}
     src/main.cpp
 )

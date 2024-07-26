@@ -1,0 +1,2 @@
+add_library(debug_helper INTERFACE)
+target_include_directories(debug_helper INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -8,5 +8,6 @@ target_link_libraries(
     hardware_dma
     panic
     utils
+    debug_helper
 )
-target_include_directories(analog_sensor PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(analog_sensor PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

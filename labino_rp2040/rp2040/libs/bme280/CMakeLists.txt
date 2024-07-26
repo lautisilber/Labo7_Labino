@@ -7,5 +7,8 @@ target_link_libraries(
     i2c_helper
     hardware_i2c
     pico_stdlib
+    hardware_sync
+    utils
+    debug_helper
 )
-target_include_directories(bme280 PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(bme280 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

@@ -7,4 +7,4 @@ target_link_libraries(
     hardware_gpio
     pico_time
 )
-target_include_directories(hx711_driver PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(hx711_driver PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

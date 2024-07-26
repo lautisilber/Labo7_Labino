@@ -8,4 +8,4 @@ target_link_libraries(
     hardware_sync
     panic
 )
-target_include_directories(user_flash PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(user_flash PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

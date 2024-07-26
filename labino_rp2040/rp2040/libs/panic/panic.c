@@ -1,10 +1,10 @@
 #include "panic.h"
 
-#ifndef NO_DEBUG
 #include <stdio.h>
-#endif
-
 #include <hardware/watchdog.h>
+
+#include "debug_helper.h"
+
 
 /*! CPP guard */
 #ifdef __cplusplus
@@ -26,11 +26,10 @@ inline void __attribute__ ((noreturn)) reset()
 void __attribute__ ((noreturn)) panic(const char *format, ...)
 {
     // from https://stackoverflow.com/questions/4339412/how-to-use-va-args-inside-a-c-function-instead-of-macro
-    #ifndef NO_DEBUG
+    #ifndef D_CRITICAL
     va_list args;
-
     va_start(args, format);
-    printf(format, args);
+    CRITICAL_PRINTFLN(format, args);
     va_end(args);
     #endif
 
@@ -43,30 +42,15 @@ void __attribute__ ((noreturn)) panic_pre_main(const char *format, ...)
     stdio_init_all();
     
     // from https://stackoverflow.com/questions/4339412/how-to-use-va-args-inside-a-c-function-instead-of-macro
-    #ifndef NO_DEBUG
+    #ifndef D_CRITICAL
     va_list args;
-
     va_start(args, format);
-    printf(format, args);
+    CRITICAL_PRINTFLN(format, args);
     va_end(args);
     #endif
 
     sleep_long(5);
     reset();
-}
-
-void warn(const char *format, ...)
-{
-    // from https://stackoverflow.com/questions/4339412/how-to-use-va-args-inside-a-c-function-instead-of-macro
-    #ifndef NO_DEBUG
-    va_list args;
-
-    va_start(args, format);
-    printf(format, args);
-    va_end(args);
-    #endif
-
-    sleep_long(3);
 }
 
 #ifdef __cplusplus

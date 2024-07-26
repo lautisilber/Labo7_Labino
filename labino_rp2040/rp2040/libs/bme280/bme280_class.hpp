@@ -18,11 +18,17 @@
 #define BME280_CLASS_NOT_INIT                         INT8_C(-9)
 #define BME280_CLASS_NOT_ENOUGH_TIME_BETWEEN_READS    INT8_C(-10)
 
+struct BME280Measurement
+{
+    bme280_data mean, error;
+    size_t count_humidity, count_temperature, count_pressure;
+};
+
 class BME280_I2C
 {
 private:
     struct bme280_dev _dev = {0};
-    struct bme280_data _data = {0};
+    struct BME280Measurement _data = {0};
     struct bme280_settings _settings = {0};
     uint32_t _max_delay_ms = 0;
     bool _init_flag = false;
@@ -46,6 +52,9 @@ private:
 
 private:
     bool calculate_measurement_delay();
+    bool _get_sensor_data_raw();
+    void get_sensor_data_avg_online(size_t n);
+    void get_sensor_data_avg_offline(size_t n);
 
 public:
     BME280_I2C(uint sda_pin=BME280_STOMASENSE_SDA_PIN, uint scl_pin=BME280_STOMASENSE_SCL_PIN, uint baudrate=400000,
@@ -53,9 +62,7 @@ public:
     bool begin(bool dont_i2c_init=false, bool pullups=false);
 
     bool set_sensor_settings(const struct bme280_settings *settings);
-
     bool get_sensor_settings(struct bme280_settings *settings);
-
     /*
     *@verbatim
     *    sensor_mode       |      Macros
@@ -69,8 +76,9 @@ public:
 
     bool soft_reset();
 
-    const bme280_data* get_last_sensor_data() const { return (const bme280_data*)&_data; }
-    bool get_sensor_data(const bme280_data* data);
+    const BME280Measurement* get_last_sensor_data() const { return (const BME280Measurement*)&_data; }
+    const BME280Measurement* get_sensor_data_single();
+    const BME280Measurement* get_sensor_data_avg(uint8_t n);
 
     uint32_t get_measurement_delay() const { return _max_delay_ms; }
     bool can_measure() const { return _can_measure_flag; }

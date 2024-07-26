@@ -1,14 +1,24 @@
 #include <stdio.h>
 #include <string.h>
+#include <hardware/sync.h>
 
 #include "bme280_class.hpp"
 #include "i2c_helper.h"
+
+#include "utils.hpp"
+#include "debug_helper.h"
 
 /// DEFINES AND DECLARATIONS ///
 
 static void print_error(int8_t err_code);
 
 #define _BME280_CLASS_PRINT_ERROR(err_code) print_error(err_code)
+
+#define _BME280_CLASS_HUMIDTY_ERROR      3.0
+#define _BME280_CLASS_TEMPERATURE_ERROR  0.5
+#define _BME280_CLASS_PRESSURE_ERROR     1.0
+
+#define _BME280_CLASS_MAX_ITERATIONS_BEFORE_USING_OFFLINE_MEAN_STDEV  64
 
 // Recommended mode of operation for weather monitoring
 // Testing is needed, but I'd add 2x or 4x oversampling
@@ -70,8 +80,10 @@ int64_t BME280_I2C::_alarm_callback(alarm_id_t id, void *user_data)
 
 bool BME280_I2C::_schedule_measurement_alarm_flag(uint32_t in_ms)
 {
-    if (_can_measure_flag < 0)
+    uint32_t interrupts = save_and_disable_interrupts();
+    if (!_can_measure_flag)
         return false;
+    restore_interrupts(interrupts);
     alarm_id_t id = add_alarm_in_ms(in_ms, _alarm_callback, this, true);
     return id >= 0;
 }
@@ -179,20 +191,23 @@ bool BME280_I2C::soft_reset()
     return res == BME280_OK;
 }
 
-bool BME280_I2C::get_sensor_data(const bme280_data *data)
+bool BME280_I2C::_get_sensor_data_raw()
 {
-    if (!_can_measure_flag)
-    {
-        data = nullptr;
-        return false;
-    }
-
     if (_init_flag)
     {
         return false;
     }
 
-    int8_t res = bme280_get_sensor_data(BME280_ALL, &_data, &_dev);
+    uint32_t interrupts = save_and_disable_interrupts();
+    bool local_can_measure_flag = _can_measure_flag;
+    restore_interrupts(interrupts);
+
+    if (!local_can_measure_flag)
+    {
+        return false;
+    }
+
+    int8_t res = bme280_get_sensor_data(BME280_ALL, &_data.mean, &_dev);
 
     _BME280_CLASS_PRINT_ERROR(res);
 
@@ -202,6 +217,85 @@ bool BME280_I2C::get_sensor_data(const bme280_data *data)
     if (!alarm_scheduled)
         _can_measure_flag = true; // a fallback to avoid softlocking
 
+    return true;
+}
+
+const struct BME280Measurement* BME280_I2C::get_sensor_data_single()
+{
+    bool res = _get_sensor_data_raw();
+
+    if (!res) return nullptr;
+
+    _data.error.humidity    = _BME280_CLASS_HUMIDTY_ERROR;
+    _data.error.temperature = _BME280_CLASS_TEMPERATURE_ERROR;
+    _data.error.pressure    = _BME280_CLASS_PRESSURE_ERROR;
+
+    return get_last_sensor_data();
+}
+
+void BME280_I2C::get_sensor_data_avg_online(size_t n)
+{
+    double humidities[n] = {0}, temperatures[n] = {0}, pressures[n] = {0};
+    size_t n_successes = 0;
+
+    for (size_t i = 0; i < n; ++i)
+    {
+        if (_get_sensor_data_raw())
+        {
+            humidities[n_successes] = _data.mean.humidity;
+            temperatures[n_successes] = _data.mean.temperature;
+            pressures[n_successes] = _data.mean.pressure;
+            ++n_successes;
+        }
+        sleep_ms(_max_delay_ms);
+    }
+
+    // this is only possible in the online calculation of mean and stdev, because we need all
+    // data points to make the irq filtering
+    _data.count_humidity = interquartile_range_filter<double, double>(humidities, n_successes, 1.5f);
+    _data.count_temperature = interquartile_range_filter<double, double>(temperatures, n_successes, 1.5f);
+    _data.count_pressure = interquartile_range_filter<double, double>(pressures, n_successes, 1.5f);
+
+    calc_mean_stdev_online<double, double>(humidities, _data.count_humidity, &_data.mean.humidity, &_data.error.humidity);
+    calc_mean_stdev_online<double, double>(temperatures, _data.count_temperature, &_data.mean.temperature, &_data.error.temperature);
+    calc_mean_stdev_online<double, double>(pressures, _data.count_pressure, &_data.mean.pressure, &_data.error.pressure);
+}
+
+void BME280_I2C::get_sensor_data_avg_offline(size_t n)
+{
+    struct WelfordAggregate<double> welf_agg_hum   = {.count=0, .mean=0.0, .m2=0.0};
+    struct WelfordAggregate<double> welf_agg_temp  = {.count=0, .mean=0.0, .m2=0.0};
+    struct WelfordAggregate<double> welf_agg_press = {.count=0, .mean=0.0, .m2=0.0};
+
+    for (size_t i = 0; i < n; ++i)
+    {
+        if (_get_sensor_data_raw())
+        {
+            calc_mean_stdev_welford<double, double>(&welf_agg_hum, _data.mean.humidity);
+            calc_mean_stdev_welford<double, double>(&welf_agg_temp, _data.mean.temperature);
+            calc_mean_stdev_welford<double, double>(&welf_agg_press, _data.mean.pressure);
+        }
+        sleep_ms(_max_delay_ms);
+    }
+
+    calc_mean_stdev_welford_finish<double, double>(&welf_agg_hum, &_data.mean.humidity, &_data.error.humidity);
+    calc_mean_stdev_welford_finish<double, double>(&welf_agg_temp, &_data.mean.temperature, &_data.error.temperature);
+    calc_mean_stdev_welford_finish<double, double>(&welf_agg_press, &_data.mean.pressure, &_data.error.pressure);
+    _data.count_humidity = welf_agg_hum.count;
+    _data.count_temperature = welf_agg_temp.count;
+    _data.count_pressure = welf_agg_press.count;
+}
+
+const struct BME280Measurement* BME280_I2C::get_sensor_data_avg(uint8_t n)
+{
+    if (n > _BME280_CLASS_MAX_ITERATIONS_BEFORE_USING_OFFLINE_MEAN_STDEV)
+    {
+        get_sensor_data_avg_offline(n);
+    }
+    else
+    {
+        get_sensor_data_avg_online(n);
+    }
     return get_last_sensor_data();
 }
 

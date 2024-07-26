@@ -6,4 +6,4 @@ target_link_libraries(
     hardware_i2c
     pico_stdlib
 )
-target_include_directories(i2c_helper PUBLIC "${CMAKE_CURRENT_COURCE_DIR}")
+target_include_directories(i2c_helper PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
