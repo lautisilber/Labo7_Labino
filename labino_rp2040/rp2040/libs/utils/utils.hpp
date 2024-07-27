@@ -5,6 +5,8 @@
 #include "pico/stdlib.h"
 #include <limits.h>
 
+#define CLAMP(x, min, max) MAX(MIN(x, max), min)
+
 template <typename T>
 void dec_2_bin(T dec, bool bin[sizeof(T)*CHAR_BIT]);
 
@@ -51,5 +53,21 @@ void exponential_error_propagation(T *mean, T*stdev, T r, T r_stdev, T a, T a_st
 
 template <typename T>
 void logarithm_error_propagation(T *mean, T*stdev, T r, T r_stdev, T a, T a_stdev, T b, T b_stdev, T c, T c_stdev, T d, T d_stdev);
+
+
+
+
+template <typename T_ARGS, typename T_CALC>
+T_ARGS map_2_range(T_ARGS value, T_ARGS in_min, T_ARGS in_max, T_ARGS out_min, T_ARGS out_max);
+
+template <typename T>
+int8_t sign(T v);
+
+template <typename T>
+inline T abs(T v);
+
+// returns the number of steps to make a linear interpolation beteween begin and end with a step of step_size
+template <typename T>
+size_t lerp(T begin, T end, T step_size);
 
 #endif /* UTILS_H */

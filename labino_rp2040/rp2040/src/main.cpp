@@ -6,6 +6,7 @@
 #include "hx711_mux.hpp"
 #include "analog_sensor.hpp"
 
+
 int __attribute__ ((noreturn)) main() {
     stdio_init_all();
     for (;;)

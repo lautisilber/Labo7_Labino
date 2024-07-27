@@ -217,3 +217,34 @@ void logarithm_error_propagation(T *mean, T*stdev, T r, T r_stdev, T a, T a_stde
     *mean = a * l + d;
     *stdev = sqrt( d_stdev2 + ( (a2 * (c_stdev2 + b2*r_stdev2 + b_stdev2+r2)) / rbc) + a_stdev2 * l2 );
 }
+
+
+
+
+template <typename T_ARGS, typename T_CALC>
+T_ARGS map_2_range(T_ARGS value, T_ARGS in_min, T_ARGS in_max, T_ARGS out_min, T_ARGS out_max)
+{
+    T_CALC in_range  = in_max - in_min;
+    T_CALC out_range = out_max - out_min;
+    return (T_ARGS)(((T_CALC)value) * (out_range / in_range) + ((T_CALC)out_min));
+}
+
+template <typename T>
+int8_t sign(T v)
+{
+    return (v > 0) - (v < 0);
+}
+
+template <typename T>
+inline T abs(T v)
+{
+    return (v > 0 ? v : -v);
+}
+
+
+template <typename T>
+size_t lerp(T begin, T end, T step_size)
+{
+    const T range = (end > begin) ? end - begin : begin - end;
+    return range / step_size;
+}
