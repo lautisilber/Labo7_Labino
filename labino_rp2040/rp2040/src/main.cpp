@@ -1,6 +1,7 @@
 #include "pico/stdlib.h"
 #include "pico.h"
 #include <stdio.h>
+#include "FreeRTOS.h"
 #include "bme280_class.hpp"
 #include "stepper.hpp"
 #include "hx711_mux.hpp"
@@ -15,3 +16,4 @@ int __attribute__ ((noreturn)) main() {
     }
     __builtin_unreachable();
 }
+

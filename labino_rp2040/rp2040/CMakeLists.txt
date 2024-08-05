@@ -12,6 +12,8 @@ set(PROJECT_NAME StomaSenseRP2040)
 project(${PROJECT_NAME} C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
+set(VERSION_NUMBER "1.0.0")
+set(BUILD_NUMBER "1")
 
 # Initialise the Pico SDK
 pico_sdk_init()
@@ -20,11 +22,6 @@ add_compile_definitions(PICO_DEFAULT_LED_PIN=22)
 
 add_subdirectory(libs)
 
-get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
-foreach(dir ${dirs})
-  message(STATUS "dir='${dir}'")
-endforeach()
-
 add_executable(${PROJECT_NAME}
     src/main.cpp
 )
@@ -32,6 +29,7 @@ add_executable(${PROJECT_NAME}
 # pull in common dependencies
 target_link_libraries(${PROJECT_NAME} PUBLIC
     pico_stdlib
+    FreeRTOS
     bme280
     stepper
     hx711_mux
