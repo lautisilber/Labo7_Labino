@@ -29,7 +29,7 @@
 
 
 /* Using FreeRTOS flag */
-#define FREERTOS_INSTALLED
+#define FREE_RTOS_INSTALLED
 
 /* Use Pico SDK ISR handlers */
 #define vPortSVCHandler         isr_svcall
@@ -41,7 +41,7 @@
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 0           // TODO: test if 1 works, should be more efficient
 #define configUSE_TICKLESS_IDLE                 0           // 1 to go to sleep every time the mcu idles... maybe not great idea for this case
 #define configCPU_CLOCK_HZ                      133000000   // 133MHz for RP2040
-#define configTICK_RATE_HZ          ( ( TickType_t ) 1000 ) // FreeRTOS beats per second
+#define configTICK_RATE_HZ                      ( ( TickType_t ) 1000 ) // FreeRTOS beats per second -> 1000 Hz means 1 tick = 1 ms
 #define configMAX_PRIORITIES                    32
 #define configMINIMAL_STACK_SIZE                ( configSTACK_DEPTH_TYPE ) 256
 #define configMAX_TASK_NAME_LEN                 16

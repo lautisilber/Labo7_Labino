@@ -6,6 +6,8 @@
 #include "task.h"
 #include "timers.h"
 
+#define FREE_RTOS_TASK_MIN_STACK_SIZE(vars_size) MAX(vars_size, configMINIMAL_STACK_SIZE)
+
 // #define FREE_RTOS_IDLE_TASK_SIZE configMINIMAL_STACK_SIZE * 2
 
 // /* static memory allocation for the IDLE task */

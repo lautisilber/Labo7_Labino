@@ -1,31 +1,21 @@
 #include "pico/stdlib.h"
 #include "debug_helper.h"
+#include "pico/time.h"
 #include <stdio.h>
 
 
 #include "FreeRTOS_Static.h"
 #include "task.h"
 
-void print_task(void *pvParameters);
+void print_task_freertos(void *pvParameters);
+bool print_task_hw(repeating_timer_t *rt);
 
-const char *msgs[3] = { "1_static", "2_static", "3_dynamic" };
+const size_t stack_size = FREE_RTOS_TASK_MIN_STACK_SIZE(sizeof(uint8_t) + sizeof(char)*32);
 
-struct TaskData
-{
-    TickType_t tick_delay;
-    const char *msg;
-};
+StackType_t freertos_task_stack[stack_size];
+StaticTask_t freertos_task_buffer;
 
-const size_t stack_size = FREE_RTOS_TASK_MIN_STACK_SIZE(sizeof(TaskData) + sizeof(uint8_t) + sizeof(TaskData *));
-
-StackType_t stack_task_1[stack_size];
-StackType_t stack_task_2[stack_size];
-StaticTask_t task_1_buffer;
-StaticTask_t task_2_buffer;
-
-struct TaskData task_1_data = { .tick_delay=500, .msg=msgs[0] };
-struct TaskData task_2_data = { .tick_delay=733, .msg=msgs[1] };
-struct TaskData task_3_data = { .tick_delay=987, .msg=msgs[2] };
+static uint32_t counter = 0;
 
 int main(void)
 {
@@ -55,33 +45,19 @@ int main(void)
     */
 
     xTaskCreateStatic(
-        print_task,
+        print_task_freertos,
         "static_1",
         stack_size,
-        &task_1_data,
+        NULL,
         1,
-        stack_task_1,
-        &task_1_buffer
+        freertos_task_stack,
+        &freertos_task_buffer
     );
 
-    xTaskCreateStatic(
-        print_task,
-        "static_2",
-        stack_size,
-        &task_2_data,
-        1,
-        stack_task_2,
-        &task_2_buffer
-    );
 
-    xTaskCreate(
-        print_task,
-        "dynam_3",
-        stack_size,
-        &task_3_data,
-        1,
-        NULL
-    );
+    printf("Starting timer\n");
+    repeating_timer_t timer_handler;
+    add_repeating_timer_us(35, print_task_hw, &counter, &timer_handler);
 
     printf("Starting scheduler\n");
     vTaskStartScheduler();
@@ -89,13 +65,23 @@ int main(void)
     CRITICAL_PRINTLN("Shouldn't have reached this section!");
 }
 
-void print_task(void *pvParameters)
+void print_task_freertos(void *pvParameters)
 {
-    uint8_t counter = 0;
-    struct TaskData *task_data = (struct TaskData *)pvParameters;
+    uint32_t old_counter_value = 0;
     for (;;)
     {
-        printf("%s (%u)\n", task_data->msg, counter++);
-        vTaskDelay(task_data->tick_delay);
+        printf("freertos %u (diff %u)\n", counter, counter - old_counter_value);
+        old_counter_value = counter;
+        vTaskDelay(1000); // 1 tick = 1 ms at 1000 Hz
     }
+}
+
+bool print_task_hw(repeating_timer_t *rt)
+{
+    uint32_t *counter = (uint32_t *)rt->user_data;
+    UBaseType_t uxSavedInterruptStatus = taskENTER_CRITICAL_FROM_ISR();
+    // printf("hw_timer %u\n", *counter);
+    *counter += 1;
+    taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
+    return true; // true = repeat
 }

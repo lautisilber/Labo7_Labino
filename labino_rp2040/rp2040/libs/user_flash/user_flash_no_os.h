@@ -1,5 +1,5 @@
-#ifndef USER_FLASH_H
-#define USER_FLASH_H
+#ifndef USER_FLASH_NO_OS_H
+#define USER_FLASH_NO_OS_H
 
 #include <pico/stdlib.h>
 #include <hardware/flash.h>
@@ -20,11 +20,11 @@ extern "C" {
 #define USER_FLASH_SAVE_BEGIN_ADRESS (PICO_FLASH_SIZE_BYTES - USER_FLASH_SIZE)
 #define USER_FLASH_PAGE_SIZE         FLASH_PAGE_SIZE
 
-bool user_flash_save(uint32_t location, const uint8_t *data, size_t length);
-bool user_flash_load(uint32_t location, uint8_t *data, size_t length);
+bool user_flash_save_no_os(uint32_t location, const uint8_t *data, size_t length);
+bool user_flash_load_no_os(uint32_t location, uint8_t *data, size_t length);
 
 #ifdef __cplusplus
 }
 #endif /* End of CPP guard */
 
-#endif /* USER_FLASH_H */
+#endif /* USER_FLASH_NO_OS_H */

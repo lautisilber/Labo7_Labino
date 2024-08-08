@@ -1,10 +1,15 @@
 #include "user_flash.h"
-#include <hardware/flash.h>
 #include <hardware/sync.h>
 #include <string.h>
 
+#if __has_include("FreeRTOS_Static.h") || __has_include("FreeRTOS.h")
+#define _USER_FLASH_FREE_RTOS
+#endif
+
+#ifdef _USER_FLASH_FREE_RTOS
 #include "FreeRTOS_Static.h"
 #include "task.h"
+#endif
 
 /*! CPP guard */
 #ifdef __cplusplus
@@ -12,13 +17,13 @@ extern "C" {
 #endif
 
 
-static bool calculate_absolute_offset(uint32_t location, size_t length, uint32_t *absolute_offset)
+static bool _calculate_absolute_offset(uint32_t location, size_t length, uint32_t *absolute_offset)
 {
     *absolute_offset = location + USER_FLASH_SAVE_BEGIN_ADRESS;
     return *absolute_offset >= USER_FLASH_SAVE_BEGIN_ADRESS && *absolute_offset + length < PICO_FLASH_SIZE_BYTES;
 }
 
-#ifndef FREERTOS_INSTALLED
+#ifndef _USER_FLASH_FREE_RTOS
 struct _UserFlashData
 {
     uint32_t absolute_offset;
@@ -35,10 +40,10 @@ void _user_flash_save_safe_callback(void *data)
 
 bool user_flash_save(uint32_t location, const uint8_t *data, size_t length)
 {
-    #ifdef FREERTOS_INSTALLED
+    #ifdef _USER_FLASH_FREE_RTOS
 
     uint32_t absolute_offset;
-    if (!calculate_absolute_offset(location, length, &absolute_offset))
+    if (!_calculate_absolute_offset(location, length, &absolute_offset))
         return false;
 
     // enter critical
@@ -52,8 +57,8 @@ bool user_flash_save(uint32_t location, const uint8_t *data, size_t length)
 
     #else
 
-    _UserFlashData user_flash_data{.absolute_offset=0, .data=data, .length=length};
-    if (!calculate_absolute_offset(location, length, &user_flash_data.absolute_offset))
+    struct _UserFlashData user_flash_data{.absolute_offset=0, .data=data, .length=length};
+    if (!_calculate_absolute_offset(location, length, &user_flash_data.absolute_offset))
         return false;
     int res = flash_safe_execute(_user_flash_save_safe_callback, (void *)&user_flash_data, 1000); // timeout is 1000 ms
         #ifdef D_ERROR
@@ -81,7 +86,7 @@ bool user_flash_save(uint32_t location, const uint8_t *data, size_t length)
     #endif
 
     // uint32_t absolute_offset;
-    // if (!calculate_absolute_offset(&absolute_offset))
+    // if (!_calculate_absolute_offset(&absolute_offset))
     //     return false;
 
     // // enter critical
@@ -103,14 +108,14 @@ bool user_flash_save(uint32_t location, const uint8_t *data, size_t length)
 bool user_flash_load(uint32_t location, uint8_t *data, size_t length)
 {
     uint32_t absolute_offset;
-    if (!calculate_absolute_offset(location, length, &absolute_offset))
+    if (!_calculate_absolute_offset(location, length, &absolute_offset))
         return false;
 
     // Compute the memory-mapped address, remembering to include the offset for RAM
     uint8_t *addr = (uint8_t *)XIP_BASE + absolute_offset;
     
     // enter critical
-    #ifdef FREERTOS_INSTALLED
+    #ifdef _USER_FLASH_FREE_RTOS
     taskENTER_CRITICAL();
     #else
     uint32_t interrupts = save_and_disable_interrupts();
@@ -118,7 +123,7 @@ bool user_flash_load(uint32_t location, uint8_t *data, size_t length)
     // critical section
     memcpy(data, addr, length);
     // exit critical
-    #ifdef FREERTOS_INSTALLED
+    #ifdef _USER_FLASH_FREE_RTOS
     taskEXIT_CRITICAL();
     #else
     restore_interrupts(interrupts);
@@ -126,6 +131,10 @@ bool user_flash_load(uint32_t location, uint8_t *data, size_t length)
 
     return true;
 }
+
+#ifdef _USER_FLASH_FREE_RTOS
+#undef _USER_FLASH_FREE_RTOS
+#endif
 
 #ifdef __cplusplus
 }
