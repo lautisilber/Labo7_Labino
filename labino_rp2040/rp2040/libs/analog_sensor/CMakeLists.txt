@@ -6,7 +6,7 @@ target_link_libraries(
     pico_stdlib
     hardware_adc
     hardware_dma
-    panic
+    user_panic
     utils
     debug_helper
 )

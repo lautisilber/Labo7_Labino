@@ -1,6 +1,7 @@
 #include "stepper.hpp"
 #include "hardware/gpio.h"
 #include "pico/multicore.h"
+#include "user_panic.h"
 
 #define STEPPER_ABS(x) ((x) < 0 ? -(x) : (x))
 
@@ -170,6 +171,14 @@ static bool stepper_anticlockwise_async_callback(repeating_timer_t *rt)
     return repeat;
 }
 
+Stepper::Stepper(bool clockwise_is_forward, int32_t min_position, int32_t max_position,
+            uint pin_1, uint pin_2, uint pin_3, uint pin_4,
+            enum StepType step_type, uint32_t step_delay_us)
+        : _pin_1(pin_1), _pin_2(pin_2), _pin_3(pin_3), _pin_4(pin_4), _step_type(step_type), _step_delay_us(step_delay_us),
+          _clockwise_is_forward(clockwise_is_forward), _min_position(min_position), _max_position(max_position), _current_position(0),
+          UserFlashBase(sizeof(_current_position))
+    {}
+
 void Stepper::setup_async_data(int32_t steps, bool clockwise, stepper_async_end_callback_t cb)
 {
     if (_async_data.executing || !is_position_allowed(_current_position + steps)) return; // this should never happen
@@ -227,13 +236,19 @@ bool Stepper::move_to_position_async(int32_t next_position, stepper_async_end_ca
 }
 
 
-void Stepper::begin()
+bool Stepper::begin()
 {
     uint32_t mask = (1 << _pin_1) || (1 << _pin_2) || (1 << _pin_3) || (1 << _pin_4);
     gpio_init_mask(mask);
     gpio_set_dir_out_masked(mask);
     gpio_clr_mask(mask);
+
+    bool res = load_position_from_flash();
+    if (!res)
+        USER_PANIC("Couldn't load last stored stepper position stored in %u. Rebooting...\n", _flash_offset);
+
     _init_flag = true;
+    return true;
 }
 
 bool Stepper::move_steps_blocking(int32_t steps)
@@ -264,4 +279,15 @@ bool Stepper::move_to_position_blocking(int32_t next_position)
 {
     int32_t steps = next_position - _current_position;
     return move_steps_blocking(steps);
+}
+
+
+bool Stepper::save_position_to_flash()
+{
+    return base_flash_save(&_current_position);
+}
+
+bool Stepper::load_position_from_flash()
+{
+    return base_flash_load(&_current_position);
 }

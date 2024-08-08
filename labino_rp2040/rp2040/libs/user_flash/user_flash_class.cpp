@@ -1,24 +1,31 @@
 #include "user_flash_class.hpp"
 
-#include "panic.h"
+#include "user_panic.h"
 
 UserFlashBase::UserFlashBase(uint32_t flash_user_size)
-    : _flash_user_size(flash_user_size)
+    : _flash_user_size(flash_user_size), _flash_offset(UserFlashBase::_moving_user_flash_end)
 {
-    if (!register_new_user(&_flash_user_index, _flash_user_size))
+    UserFlashBase::_moving_user_flash_end += _flash_user_size;
+    if (UserFlashBase::_moving_user_flash_end % USER_FLASH_PAGE_SIZE != 0)
     {
-        panic_pre_main("Couldn't find space for new user in flash!");
+        UserFlashBase::_moving_user_flash_end = USER_FLASH_PAGE_SIZE * ((UserFlashBase::_moving_user_flash_end / USER_FLASH_PAGE_SIZE) + 1);
+    }
+    if (UserFlashBase::_moving_user_flash_end >= USER_FLASH_SIZE)
+    {
+        USER_PANIC_PRE_MAIN("Couldn't assign user flash of size %u at starting location of %u due to overflow (total user flash size %u)", _flash_user_size, _flash_offset, USER_FLASH_SIZE);
     }
 }
 
 
-inline bool UserFlashBase::base_flash_save(const void* data)
+bool UserFlashBase::base_flash_save(const void* data)
 {
-    return flash_user_save(_flash_user_index, (const uint8_t*)data);
+    return user_flash_save(_flash_offset, (const uint8_t*)data, _flash_user_size);
 }
 
 
-inline bool UserFlashBase::base_flash_load(void* data)
+bool UserFlashBase::base_flash_load(void* data)
 {
-    return flash_user_load(_flash_user_index, (uint8_t*)data);
+    return user_flash_load(_flash_offset, (uint8_t*)data, _flash_user_size);
 }
+
+uint32_t UserFlashBase::_moving_user_flash_end = 0;

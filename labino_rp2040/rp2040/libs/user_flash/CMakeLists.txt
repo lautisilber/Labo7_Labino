@@ -6,6 +6,20 @@ target_link_libraries(
     pico_stdlib
     hardware_flash
     hardware_sync
-    panic
+    user_panic
 )
+if(FREERTOS_STATIC)
+target_link_libraries(
+    user_flash
+    FreeRTOS-Static
+)
+else()
+target_link_libraries(
+    user_flash
+    FreeRTOS-Kernel
+    FreeRTOS-Kernel-Heap4
+)
+endif()
+
+
 target_include_directories(user_flash PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

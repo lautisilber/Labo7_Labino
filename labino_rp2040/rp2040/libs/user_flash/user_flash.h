@@ -14,18 +14,13 @@ extern "C" {
     FLASH_PAGE_SIZE       # The size of one page, in bytes (the mimimum amount you can write)
 */
 
-#define FLASH_USER_SAVE_BYTES_SIZE   (16 * 20)
-#define FLASH_USER_SAVE_N_SECTORS    (FLASH_SECTOR_SIZE / FLASH_USER_SAVE_BYTES_SIZE + (FLASH_SECTOR_SIZE % FLASH_USER_SAVE_BYTES_SIZE > 0))
-#define FLASH_USER_SAVE_BEGIN_ADRESS (PICO_FLASH_SIZE_BYTES - (FLASH_USER_SAVE_N_SECTORS * FLASH_SECTOR_SIZE))
-#define FLASH_USER_MAX_USERS 16
 
-bool register_new_user(uint32_t *user_index, uint32_t length);
+#define USER_FLASH_SIZE              2048
+#define USER_FLASH_SAVE_BEGIN_ADRESS (PICO_FLASH_SIZE_BYTES - USER_FLASH_SIZE)
+#define USER_FLASH_PAGE_SIZE         256
 
-bool flash_user_save_raw(uint32_t location, const uint8_t *data, size_t length);
-bool flash_user_load_raw(uint32_t location, uint8_t *data, size_t length);
-
-bool flash_user_save(uint32_t user_index, const uint8_t *data);
-bool flash_user_load(uint32_t user_index, uint8_t *data);
+bool user_flash_save(uint32_t location, const uint8_t *data, size_t length);
+bool user_flash_load(uint32_t location, uint8_t *data, size_t length);
 
 #ifdef __cplusplus
 }

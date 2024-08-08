@@ -3,6 +3,9 @@
 
 #include <pico/stdlib.h>
 #include <stdio.h>
+#include <string.h>
+
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
 /*
     Debugging flags:
@@ -25,7 +28,7 @@ extern "C" {
 #endif
 
 #if (defined(D_DEBUG) || defined(D_INFO) || defined(D_WARN) || defined(D_ERROR) || defined(D_CRITICAL))
-#define _D_PRINTF_HELPER(prefix, ...) do { printf("%s | %s - %s: ", __FILE__, __LINE__, prefix); printf(__VA_ARGS__); } while(0)
+#define _D_PRINTF_HELPER(prefix, ...) do { printf("%s - %u | %s: ", __FILENAME__, __LINE__, prefix); printf(__VA_ARGS__); } while(0)
 #endif
 
 #ifdef D_DEBUG

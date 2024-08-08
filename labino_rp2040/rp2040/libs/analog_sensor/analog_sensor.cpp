@@ -5,7 +5,7 @@
 #include "hardware/dma.h"
 #include <math.h>
 
-#include "panic.h"
+#include "user_panic.h"
 #include "utils.hpp"
 #include "debug_helper.h"
 
@@ -138,11 +138,11 @@ AnalogSensorBase::AnalogSensorBase(uint pin)
 {
     if (!is_pin_adc(_pin))
     {
-        panic_pre_main("Can't construct AnalogSensor with pin %u, since it's not an ADC pin\n", _pin);
+        USER_PANIC_PRE_MAIN("Can't construct AnalogSensor with pin %u, since it's not an ADC pin\n", _pin);
     }
     else if(_is_channel_already_used(_adc_channel))
     {
-        panic_pre_main("Can't construct AnalogSensor with pin %u, since it's ADC channel (%u) is already in use by another AnalogSensor\n", _pin, _adc_channel);
+        USER_PANIC_PRE_MAIN("Can't construct AnalogSensor with pin %u, since it's ADC channel (%u) is already in use by another AnalogSensor\n", _pin, _adc_channel);
     }
     _claim_adc_channel(_adc_channel);
     _selected_channel = 4;

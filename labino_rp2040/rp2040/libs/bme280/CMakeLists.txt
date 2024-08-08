@@ -10,5 +10,6 @@ target_link_libraries(
     hardware_sync
     utils
     debug_helper
+    FreeRTOS
 )
 target_include_directories(bme280 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

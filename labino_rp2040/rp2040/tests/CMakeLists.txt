@@ -1,0 +1,6 @@
+add_subdirectory(test_test)
+add_subdirectory(alarm_test)
+add_subdirectory(flash_test)
+add_subdirectory(panic_test)
+add_subdirectory(freertos_simple_test)
+add_subdirectory(seeedstudio_rp2040_test)

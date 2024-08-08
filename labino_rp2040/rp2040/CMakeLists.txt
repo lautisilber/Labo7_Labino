@@ -20,24 +20,15 @@ pico_sdk_init()
 
 add_compile_definitions(PICO_DEFAULT_LED_PIN=22)
 
+set(FREERTOS_STATIC 1) # should be 1 or 0
+add_definitions( -DFREERTOS_STATIC=${FREERTOS_STATIC} )
+
 add_subdirectory(libs)
 
-add_executable(${PROJECT_NAME}
-    src/main.cpp
-)
+# add src
+add_subdirectory(src)
 
-# pull in common dependencies
-target_link_libraries(${PROJECT_NAME} PUBLIC
-    pico_stdlib
-    FreeRTOS
-    bme280
-    stepper
-    hx711_mux
-    analog_sensor
-)
+# add test
+add_subdirectory(tests)
 
-# create map/bin/hex file etc.
-pico_add_extra_outputs(${PROJECT_NAME})
 
-pico_enable_stdio_usb(${PROJECT_NAME} 1)
-pico_enable_stdio_uart(${PROJECT_NAME} 0)

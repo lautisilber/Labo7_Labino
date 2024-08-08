@@ -6,14 +6,16 @@
 
 class UserFlashBase
 {
+private:
+    static uint32_t _moving_user_flash_end;
 protected:
-    uint32_t _flash_user_index;
+    const uint32_t _flash_offset;
     const uint32_t _flash_user_size;
 
     UserFlashBase(uint32_t flash_user_size);
 
-    inline bool base_flash_save(const void* data);
-    inline bool base_flash_load(void* data);
+    bool base_flash_save(const void* data);
+    bool base_flash_load(void* data);
 };
 
 

@@ -37,7 +37,10 @@ static BME280_INTF_RET_TYPE bme280_read_i2c(uint8_t reg_addr, uint8_t *reg_data,
     // int i2c_read_blocking_until (i2c_inst_t *i2c, uint8_t addr, uint8_t *dst, size_t len, bool nostop, absolute_time_t until)
     const bool nonstop = false;               // if false, release bus
     const uint timeout_us = 10 * 1000 * 1000; // 10 s
+
+    // TODO: check if when FreeRTOS this line must be critical
     int rslt = i2c_read_timeout_us(BME280_STOMASENSE_I2C_INTERFACE, reg_addr, reg_data, len, nonstop, timeout_us);
+
     if (rslt == PICO_ERROR_TIMEOUT)
         return -1;
     else if (rslt == PICO_ERROR_GENERIC)
@@ -53,7 +56,10 @@ static BME280_INTF_RET_TYPE bme280_write_i2c(uint8_t reg_addr, const uint8_t *re
     // int i2c_write_blocking_until (i2c_inst_t *i2c, uint8_t addr, const uint8_t *src, size_t len, bool nostop, absolute_time_t until)
     const bool nonstop = false;               // if false, release bus
     const uint timeout_us = 10 * 1000 * 1000; // 10 s
+
+    // TODO: check if when FreeRTOS this line must be critical
     int rslt = i2c_write_timeout_us(BME280_STOMASENSE_I2C_INTERFACE, reg_addr, reg_data, len, nonstop, timeout_us);
+    
     if (rslt == PICO_ERROR_TIMEOUT)
         return -1;
     else if (rslt == PICO_ERROR_GENERIC)

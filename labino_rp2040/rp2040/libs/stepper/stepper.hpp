@@ -3,6 +3,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
+#include "user_flash_class.hpp"
 
 
 // #define STEPPER_STEP_MIN_DELAY_US 1000
@@ -16,7 +17,7 @@ enum StepType : uint8_t
 
 typedef void (*stepper_async_end_callback_t)(int32_t old_position, int32_t new_position);
 
-class Stepper
+class Stepper : public UserFlashBase
 {
 private:
     uint _pin_1, _pin_2, _pin_3, _pin_4;
@@ -60,12 +61,9 @@ private:
 public:
     Stepper(bool clockwise_is_forward, int32_t min_position, int32_t max_position,
             uint pin_1=15, uint pin_2=14, uint pin_3=13, uint pin_4=12,
-            enum StepType step_type=STEPPER_HALF,uint32_t step_delay_us=1000)
-        : _pin_1(pin_1), _pin_2(pin_2), _pin_3(pin_3), _pin_4(pin_4), _step_type(step_type), _step_delay_us(step_delay_us),
-          _clockwise_is_forward(clockwise_is_forward), _min_position(min_position), _max_position(max_position), _current_position(0)
-    {}
+            enum StepType step_type=STEPPER_HALF, uint32_t step_delay_us=1000);
 
-    void begin();
+    bool begin();
 
     bool move_steps_blocking(int32_t steps);
     bool move_to_position_blocking(int32_t next_position);
@@ -74,6 +72,9 @@ public:
     bool move_to_position_async(int32_t next_position, stepper_async_end_callback_t callback=nullptr);
 
     inline int32_t get_current_position() const { return _current_position; }
+
+    bool save_position_to_flash();
+    bool load_position_from_flash();
 };
 
 #endif /* STEPPER_HPP */

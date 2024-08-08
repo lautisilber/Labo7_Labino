@@ -24,7 +24,7 @@ struct HX711MuxCalibration
 
 #define HX711_MUX_USER_FLASH_LENGTH sizeof(struct HX711MuxCalibration) * HX711_MUX_MAX_MODULES
 static_assert(
-    HX711_MUX_USER_FLASH_LENGTH <= FLASH_USER_SAVE_BYTES_SIZE,
+    HX711_MUX_USER_FLASH_LENGTH <= USER_FLASH_SIZE,
     "Not enough flash user space to save all calibrations!"
 );
 
@@ -54,7 +54,7 @@ struct HX711ResponseAvgCalib //: HX711ResponseAvg
     size_t n_filtered_reads;
 };
 
-class HX711Mux : UserFlashBase
+class HX711Mux : public UserFlashBase
 {
 private:
     struct HX711 _hx711;

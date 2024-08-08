@@ -8,5 +8,7 @@ target_link_libraries(
     hardware_gpio
     pico_time
     pico_multicore
+    user_flash
+    user_panic
 )
 target_include_directories(stepper PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
