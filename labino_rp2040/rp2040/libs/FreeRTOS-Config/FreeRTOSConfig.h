@@ -64,11 +64,11 @@
                                                             // than the number of bytes in a size_t.
 
 /* Memory allocation related definitions. */
-#define configSUPPORT_STATIC_ALLOCATION         FREERTOS_STATIC           // I really want to use static memory allocation
-#define configSUPPORT_DYNAMIC_ALLOCATION        1 - FREERTOS_STATIC           // TODO: I'll try to use only static memory. Get FreeRTOS to allocation task memory
+#define configSUPPORT_STATIC_ALLOCATION         FREE_RTOS_STATIC           // I really want to use static memory allocation
+#define configSUPPORT_DYNAMIC_ALLOCATION        FREE_RTOS_DYNAMIC          // TODO: I'll try to use only static memory. Get FreeRTOS to allocation task memory
 
 #define configAPPLICATION_ALLOCATED_HEAP        0
-#define configTOTAL_HEAP_SIZE                   (128*1024)
+#define configTOTAL_HEAP_SIZE                   (32*1024)   // I reduced this size to try to use static allocation
 
 /* Hook function related definitions. */
 #define configUSE_IDLE_HOOK                     0           // 1 to allow one function run every time the processor idles

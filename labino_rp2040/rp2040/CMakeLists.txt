@@ -20,13 +20,15 @@ pico_sdk_init()
 
 add_compile_definitions(PICO_DEFAULT_LED_PIN=22)
 
-set(FREERTOS_STATIC 1) # should be 1 or 0
-add_definitions( -DFREERTOS_STATIC=${FREERTOS_STATIC} )
+set(FREE_RTOS_STATIC 1) # should be 1 or 0
+add_definitions( -DFREE_RTOS_STATIC=${FREE_RTOS_STATIC} )
+set(FREE_RTOS_DYNAMIC 1) # should be 1 or 0
+add_definitions( -DFREE_RTOS_DYNAMIC=${FREE_RTOS_DYNAMIC} )
 
 add_subdirectory(libs)
 
 # add src
-add_subdirectory(src)
+# add_subdirectory(src)
 
 # add test
 add_subdirectory(tests)

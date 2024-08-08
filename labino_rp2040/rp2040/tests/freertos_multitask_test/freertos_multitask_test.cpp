@@ -2,31 +2,37 @@
 #include "debug_helper.h"
 #include <stdio.h>
 
-#if FREERTOS_STATIC == 1
+
 #include "FreeRTOS_Static.h"
-#else
-#include "FreeRTOS.h"
-#endif
 #include "task.h"
 
-const uint led_pin = 25;
+void print_task(void *pvParameters);
 
-void led_toggle_task(void *pvParameters);
+const char *msgs[3] = { "1_static", "2_static", "3_dynamic" };
 
-const size_t stack_size = 1024; //sizeof(TaskData) + sizeof(uint8_t) + sizeof(TaskData *);
+struct TaskData
+{
+    TickType_t tick_delay;
+    const char *msg;
+};
 
-#if FREERTOS_STATIC == 1
-StackType_t task_stack[stack_size];
-#endif
+const size_t stack_size = MAX((sizeof(TaskData) + sizeof(uint8_t) + sizeof(TaskData *)), configMINIMAL_STACK_SIZE);
+
+StackType_t stack_task_1[stack_size];
+StackType_t stack_task_2[stack_size];
+StaticTask_t task_1_buffer;
+StaticTask_t task_2_buffer;
+
+struct TaskData task_1_data = { .tick_delay=500, .msg=msgs[0] };
+struct TaskData task_2_data = { .tick_delay=733, .msg=msgs[1] };
+struct TaskData task_3_data = { .tick_delay=987, .msg=msgs[2] };
 
 int main(void)
 {
     stdio_init_all();
-    gpio_init(led_pin);
-    gpio_set_dir(led_pin, true);
 
     sleep_ms(1000);
-    printf("Hello world! %u\n");
+    printf("Hello, world multitask! %u\n");
 
     /*
         BaseType_t xTaskCreate( TaskFunction_t pvTaskCode,
@@ -48,26 +54,34 @@ int main(void)
 
     */
 
-    #if FREERTOS_STATIC == 1
     xTaskCreateStatic(
-        led_toggle_task,
-        "toggle",
+        print_task,
+        "static_1",
         stack_size,
-        NULL,
+        &task_1_data,
         1,
-        task_stack,
-        NULL
+        stack_task_1,
+        &task_1_buffer
     );
-    #else
+
+    xTaskCreateStatic(
+        print_task,
+        "static_2",
+        stack_size,
+        &task_2_data,
+        1,
+        stack_task_2,
+        &task_2_buffer
+    );
+
     xTaskCreate(
-        led_toggle_task,
-        "toggle",
+        print_task,
+        "dynam_3",
         stack_size,
-        NULL,
+        &task_3_data,
         1,
         NULL
     );
-    #endif
 
     printf("Starting scheduler\n");
     vTaskStartScheduler();
@@ -75,18 +89,13 @@ int main(void)
     CRITICAL_PRINTLN("Shouldn't have reached this section!");
 }
 
-void led_toggle_task(void *pvParameters)
+void print_task(void *pvParameters)
 {
-    bool state;
+    uint8_t counter = 0;
+    struct TaskData *task_data = (struct TaskData *)pvParameters;
     for (;;)
     {
-        state = !gpio_get(led_pin);
-        gpio_put(led_pin, state);
-        #if FREERTOS_STATIC == 1
-        printf("Led static %u\n", state);
-        #else
-        printf("Led dynamic %u\n", state);
-        #endif
-        vTaskDelay(500);
+        printf("%s (%u)\n", task_data->msg, counter++);
+        vTaskDelay(task_data->tick_delay);
     }
 }

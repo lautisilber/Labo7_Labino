@@ -7,16 +7,12 @@ target_link_libraries(
     hardware_flash
     hardware_sync
     user_panic
-)
-if(FREERTOS_STATIC)
-target_link_libraries(
-    user_flash
+    FreeRTOS-Kernel
     FreeRTOS-Static
 )
-else()
+if(FREE_RTOS_DYNAMIC)
 target_link_libraries(
     user_flash
-    FreeRTOS-Kernel
     FreeRTOS-Kernel-Heap4
 )
 endif()

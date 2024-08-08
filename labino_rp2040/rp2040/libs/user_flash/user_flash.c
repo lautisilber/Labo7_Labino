@@ -3,7 +3,7 @@
 #include <hardware/sync.h>
 #include <string.h>
 
-#include "FreeRTOS.h"
+#include "FreeRTOS_Static.h"
 #include "task.h"
 
 /*! CPP guard */
