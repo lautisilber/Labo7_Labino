@@ -92,8 +92,8 @@ public:
     bool calibrate_offset_single(uint8_t address, size_t n);
     bool calibrate_slope_single(uint8_t address, size_t n, float weight, float weight_error);
 
-    bool save_calibrations_to_flash();
-    bool load_calibrations_from_flash();
+    void save_calibrations_to_flash();
+    void load_calibrations_from_flash();
 };
 
 

@@ -243,9 +243,7 @@ bool Stepper::begin()
     gpio_set_dir_out_masked(mask);
     gpio_clr_mask(mask);
 
-    bool res = load_position_from_flash();
-    if (!res)
-        USER_PANIC("Couldn't load last stored stepper position stored in %u. Rebooting...\n", _flash_offset);
+    load_position_from_flash();
 
     _init_flag = true;
     return true;
@@ -282,12 +280,12 @@ bool Stepper::move_to_position_blocking(int32_t next_position)
 }
 
 
-bool Stepper::save_position_to_flash()
+void Stepper::save_position_to_flash()
 {
-    return base_flash_save(&_current_position);
+    base_flash_save(&_current_position);
 }
 
-bool Stepper::load_position_from_flash()
+void Stepper::load_position_from_flash()
 {
-    return base_flash_load(&_current_position);
+    base_flash_load(&_current_position);
 }

@@ -1,5 +1,5 @@
 add_library(user_flash STATIC
-user_flash.c user_flash.h user_flash_class.cpp user_flash_class.hpp
+user_flash_class.cpp user_flash_class.hpp
 user_flash_no_os.c user_flash_no_os.h
 )
 target_link_libraries(
@@ -9,6 +9,7 @@ target_link_libraries(
     pico_flash
     hardware_sync
     user_panic
+    debug_helper
     FreeRTOS-Kernel
     FreeRTOS-Static
 )

@@ -299,12 +299,12 @@ bool HX711Mux::calibrate_slope_single(uint8_t address, size_t n, float weight, f
     return true;
 }
 
-bool HX711Mux::save_calibrations_to_flash()
+void HX711Mux::save_calibrations_to_flash()
 {
-    return base_flash_save(&_calibrations);
+    base_flash_save(&_calibrations);
 }
 
-bool HX711Mux::load_calibrations_from_flash()
+void HX711Mux::load_calibrations_from_flash()
 {
-    return base_flash_load(&_calibrations);
+    base_flash_load(&_calibrations);
 }

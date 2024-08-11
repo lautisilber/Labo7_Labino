@@ -73,8 +73,8 @@ public:
 
     inline int32_t get_current_position() const { return _current_position; }
 
-    bool save_position_to_flash();
-    bool load_position_from_flash();
+    void save_position_to_flash();
+    void load_position_from_flash();
 };
 
 #endif /* STEPPER_HPP */
