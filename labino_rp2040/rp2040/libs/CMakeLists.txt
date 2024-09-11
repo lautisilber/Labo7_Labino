@@ -10,6 +10,7 @@ add_subdirectory(analog_sensor)
 add_subdirectory(debug_helper)
 add_subdirectory(simple_pwm)
 add_subdirectory(servo)
+# add_subdirectory(comm_api)
 add_subdirectory(FreeRTOS-Static)
 # add_subdirectory(fatfs_spi)
 
