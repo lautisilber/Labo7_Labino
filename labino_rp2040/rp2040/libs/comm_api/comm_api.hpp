@@ -6,12 +6,21 @@
 #include <string.h>
 #include <assert.h>
 #include "debug_helper.h"
+#include "utils.hpp"
+
+#if __has_include("FreeRTOS.h")
+#include "FreeRTOS.h"
+#include "task.h"
+#endif
 
 
 #define COMM_API_READ_BUFFER       256
 #define COMM_API_MAX_ARGUMENTS     16
 #define COMM_API_FORCE_END_CHAR    true
 #define COMM_API_MESSAGES_BUFFER   8
+#define COMM_API_N_DIFF_MESSAGES   32 // cantidad de mensajes differentes para asociar con callbacks
+#define COMM_API_DEFAULT_END_CHAR  ((char)'\n')
+#define COMM_API_DEFAULT_SEP_CHAR  ((char)' ')
 
 static_assert(COMM_API_MAX_ARGUMENTS >= 1);
 
@@ -19,162 +28,168 @@ static_assert(COMM_API_MAX_ARGUMENTS >= 1);
     Only ascii chars are allowed
 */
 
-
-static void remove_non_important_chars(char *s, char sep_char)
-{
-    // removes all characters that are not end_char (already supposed to be '\0'), sep_char or alphanumeric
-    size_t writer = 0, reader = 0;
-
-    while (s[reader])
-    {
-        if ((s[reader] >= 'A' && s[reader] <= 'Z') ||
-            (s[reader] >= 'a' && s[reader] <= 'z') ||
-            (s[reader] >= '0' && s[reader] <= '9') ||
-            s[reader] == end_char || s[reader] == sep_char)
-            s[writer++] = s[reader];
-        ++reader;       
-    }
-    s[writer] = '\0';
-}
-
-class CommMsg
-{
-private:
-    char _msg[COMM_API_READ_BUFFER] = {0};
-    const char _end_char, sep_char;
-
-    // each argument_idx represents an argument. _arguments[i] has a pointer to the starting character of the argument i
-    // inside the _msg. all arguments will be separated by '\0' so they act like completely different strings
-    char (*_arguments)[COMM_API_MAX_ARGUMENTS] = {nullptr};
-    size_t _n_arguments;
-
-    // void reset_arguments()
-    // {
-    //     // check if size of _arguments can be calculated as sizeof(_arguments)
-    //     memset(_arguments, nullptr, sizeof(char *) * COMM_API_MAX_ARGUMENTS);
-    //     _n_arguments = 0;
-    // }
-    void process_msg()
-    {
-        // find first end_char in msg and turn it into \0 to mark the end of the msg (effectively replacing end_char with '\0')
-        char *last_char = &_msg[MIN(strlen(_msg), COMM_API_READ_BUFFER)-1]; // pointer to the last character of _msg
-        char *end_char strchr(_msg, _end_char); // pointer to the first end_char in _msg
-        if (end_char == NULL)
-        {
-            #if COMM_API_FORCE_END_CHAR
-            WARN_PRINTFLN("Mesage didn't have an ending char (%c). Inserting end_char in last position (see COMM_API_FORCE_END_CHAR flag)", _end_char);
-            _msg[msg_len-1] = '\0';
-            #else
-            WARN_PRINTFLN("Mesage didn't have an ending char (%c). Can't process message", _end_char);
-            reset_arguments();
-            return;
-            #endif
-        }
-        else
-        {
-            end_char = '\0';
-        }
-        /////
-
-
-        // remove uninportant chars (non end (already supposed to be '\0'), sep or alphanumeric)
-        remove_non_important_chars(_msg, _sep_char);
-        // recalc last_char
-        last_char = &_msg[strlen(_msg)-1];
-        /////
-
-        // split msg in arguments
-        char *msg_char = _msg;
-        for (_n_arguments = 0; _n_arguments < COMM_API_MAX_ARGUMENTS; _n_arguments++)
-        {
-            while (msg_char != sep_char || msg_char != '\0')
-                ++msg_char;
-
-            // if we hit an important character (sep or end)
-            if (msg_char == '\0') // if end_char, dissable last argument and break
-            {
-                return;
-            }
-            else // hit sep
-            {
-                msg_char = '\0'; // turn sep into '\0' to separate arguments
-                while (msg_char+1 == _sep_char) // ignore all repetitions of sep
-                {
-                    if (++msg_char == last_char) // increment msg_char. if it becomes last_char, break
-                    {
-                        return;
-                    }
-                }
-
-                // record last char of argument (which is the same as next argument's start)
-                _arguments[_n_arguments] = msg_char;
-            }
-        }
-        /////
-    }
-public:
-    CommMsg(const char *msg, char end_char, char sep_char) :
-        _end_char(end_char), _sep_char(sep_char)
-    {
-        // msg as to be NULL ended
-        strlcpy(_msg, msg, COMM_API_READ_BUFFER);
-        process_msg();
-    }
-
-    // although internally the command is treated as the first argument, it is not exposed this way.
-    // the command has its own class and argument 0 points to the internal argument 1
-    size_t get_n_arguments() const { return _n_arguments-1; }
-    const char *get_argument(size_t n) const
-    {
-        if (n < _n_arguments-1) return nullptr;
-        return (const char *)_arguments[n+1];
-    }
-    const char *get_command() const
-    {
-        return get_argument(0);
-    }
-};
-
-
-class CommInterfaceBase
-{
-protected:
-    char _end_char, _sep_char;
-public:
-    CommInterfaceBase(char end_char, char sep_char) :
-        _end_char(end_char), _sep_char(sep_char)
-    {}
-    ~CommInterfaceBase() {}
-    virtual bool uint32_t write_single(char c) = 0;
-    size_t write(const char *msg, size_t length, bool add_end_char=true)
-    {
-        size_t i = 0;
-        for (i = 0; i < length; i++)
-            if (!write_single(msg[i])) break;
-        if (add_end_char)
-            if (write_single(_end_char)) ++i;
-        return i;
-    }
-    virtual size_t read_single(const char *msg, size_t length) = 0;
-    size_t read()
-}
+typedef void (*comm_callback_t)(const char **, size_t);
 
 class CommAPI
 {
 private:
-    CommMsg _msgs[COMM_API_MESSAGES_BUFFER];
+    class CommMsg
+    {
+    private:
+        char _msg[COMM_API_READ_BUFFER] = {0};
+        char *_arguments[COMM_API_MAX_ARGUMENTS] = {nullptr};
+        size_t _n_arguments = 0;
+
+    public:
+        // the command is the first 'word' of the message
+        // although internally the command is treated as the first argument, it is not exposed this way.
+        // the command has its own class and argument 0 points to the internal argument 1
+        size_t get_n_arguments() const { return (_n_arguments > 0 ? _n_arguments-1 : 0); }
+        const char *get_argument(size_t n) const
+        {
+            if (n < _n_arguments-1) return nullptr;
+            return (const char *)_arguments[n+1];
+        }
+        const char *get_command() const
+        {
+            return get_argument(0);
+        }
+        const char **get_all_arguments() const
+        {
+            if (get_n_arguments() == 0) return nullptr;
+            return (const char **)_arguments[1];
+        }
+        void set_raw_msg(const char *msg);
+        void process_msg(char end_char, char sep_char);
+    };
+
+    struct CommCommandResponse
+    {
+        const char *command;
+        comm_callback_t callback;
+    };
 public:
-    CommAPI(/* args */);
-    ~CommAPI();
+    // not to be used by user
+    const char _end_char, _sep_char;
+private:
+    FIFOStackForClasses<CommMsg, COMM_API_MESSAGES_BUFFER> _msgs;
+
+    comm_callback_t _default_response_callback;
+    CommCommandResponse _responses[COMM_API_N_DIFF_MESSAGES];
+    size_t _active_responses = 0;
+public:
+    // not to be used by user. to be used in the interrupt callback wrapper of each implementation
+    char _incoming_buffer[COMM_API_READ_BUFFER] = {0};
+    size_t _incoming_buffer_curr_index = 0;
+public:
+    CommAPI(char end_char, char sep_char) : _end_char(end_char), _sep_char(sep_char) {};
+    bool add_response(const char * const command, comm_callback_t callback)
+    {
+        if (_active_responses >= COMM_API_N_DIFF_MESSAGES-1) return false;
+        _responses[_active_responses].command = command;
+        _responses[_active_responses].callback = callback;
+        ++_active_responses;
+        return true;
+    }
+    void add_default_response(comm_callback_t callback)
+    {
+        _default_response_callback = callback;
+    }
+
+    bool save_new_message(const char *msg)
+    {
+        if (_msgs.full()) return false;
+        _msgs.add_slot_back();
+        CommMsg *comm_msg = _msgs.peek_back_to_edit();
+        comm_msg->set_raw_msg(msg);
+    }
+
+    bool unprocessed_messages() const { return _msgs.empty(); }
+
+    bool process_next_saved_message()
+    {
+        if (unprocessed_messages()) return false;
+
+        CommMsg *msg = _msgs.peek_front_to_read();
+        _msgs.remove_slot_front();
+        msg->process_msg(_end_char, _sep_char);
+        for (size_t i = 0; i < _active_responses; i++)
+        {
+            const CommCommandResponse *response = &_responses[i];
+            if (strncmp(msg->get_command(), response->command, COMM_API_READ_BUFFER) == 0)
+            {
+                #ifdef FREE_RTOS_INSTALLED
+                taskYIELD();
+                #endif
+
+                #ifdef D_DEBUG
+                DEBUG_PRINTF("Processing message with command '%s' and arguments ", msg->get_command());
+                if (msg->get_n_arguments() == 0)
+                {
+                    printf("\n");
+                }
+                else
+                {
+                    for (size_t _i = 0; _i < msg->get_n_arguments(); _i++)
+                    {
+                        printf("'%s'", msg->get_argument(_i));
+                        if (_i < msg->get_n_arguments()-1)
+                            printf(", ");
+                        else
+                            printf("\n");
+                    }
+                }
+                #endif
+
+                response->callback(msg->get_all_arguments(), msg->get_n_arguments());
+                return true;
+            }
+        }
+
+        #ifdef FREE_RTOS_INSTALLED
+        taskYIELD();
+        #endif
+
+        #ifdef D_DEBUG
+        DEBUG_PRINTFLN("Processing message with default callback. Command is '%s' and arguments are ", msg->get_command());
+        if (msg->get_n_arguments() == 0)
+        {
+            printf("\n");
+        }
+        else
+        {
+            for (size_t _i = 0; _i < msg->get_n_arguments(); _i++)
+            {
+                printf("'%s'", msg->get_argument(_i));
+                if (_i < msg->get_n_arguments()-1)
+                    printf(", ");
+                else
+                    printf("\n");
+            }
+        }
+        #endif
+
+        _default_response_callback(msg->get_all_arguments(), msg->get_n_arguments());
+
+        return true;
+    }
+
+    bool process_all_saved_messages()
+    {
+        bool res = false;
+        while (process_next_saved_message())
+        {
+            res = true;
+            #ifdef FREE_RTOS_INSTALLED
+            if (unprocessed_messages())
+                taskYIELD();
+            #endif
+        }
+        return res;
+    }
+
+    virtual bool send_message(const char *msg) = 0;
 };
-
-CommAPI::CommAPI(/* args */)
-{
-}
-
-CommAPI::~CommAPI()
-{
-}
 
 
 #endif /* COMM_API_HPP */
