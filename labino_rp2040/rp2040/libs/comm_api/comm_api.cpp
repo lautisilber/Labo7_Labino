@@ -16,9 +16,10 @@ static void remove_non_important_chars(char *s, char sep_char)
     }
     s[writer] = '\0';
 }
-void CommAPI::CommMsg::set_raw_msg(const char *msg)
+bool CommAPI::CommMsg::set_raw_msg(const char *msg)
 {
-    strlcpy(_msg, msg, COMM_API_READ_BUFFER);
+    const size_t len = strlcpy(_msg, msg, COMM_API_READ_BUFFER);
+    return len < COMM_API_READ_BUFFER;
 }
 
 void CommAPI::CommMsg::process_msg(char end_char, char sep_char)

@@ -2,7 +2,7 @@
 #define COMM_UART_HPP
 
 #include "comm_api.hpp"
-#include "pico/uart.h"
+#include "hardware/uart.h"
 #include "hardware/irq.h"
 
 #define COMM_UART_ID          uart0
@@ -93,4 +93,4 @@ void comm_uart_interrupt_callback_wrapper(CommAPI_UART *api)
  * 
 */
 
-#endif
+#endif /* COMM_UART_HPP */

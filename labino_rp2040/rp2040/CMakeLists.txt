@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 
-include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include(pico_sdk_import.cmake)
 
 # Set env variable 'PICO_SDK_PATH' to the local Pico SDK
 # Comment out the set() if you have a global copy of the

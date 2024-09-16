@@ -1,15 +1,17 @@
 add_library(comm_api STATIC
     comm_api.cpp comm_api.hpp
     comm_uart.hpp
+    comm_basic.hpp
 )
 
 target_link_libraries(
     comm_api
     pico_stdlib
-    pico_uart
+    hardware_uart
     debug_helper
     utils
     FreeRTOS-Kernel
+    FreeRTOS-Static
 )
 
 # target_link_libraries(

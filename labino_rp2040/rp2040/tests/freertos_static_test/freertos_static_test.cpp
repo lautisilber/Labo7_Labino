@@ -22,7 +22,7 @@ int main(void)
     gpio_set_dir(led_pin, true);
 
     sleep_ms(1000);
-    printf("Hello, world static! %u\n");
+    printf("Hello, world static!\n");
 
     /*
         BaseType_t xTaskCreate( TaskFunction_t pvTaskCode,
