@@ -3,4 +3,4 @@ To use the pico-sdk yout have to follow these steps:
     - Cmake
     - gcc-arm-none-eabi
 2. Download the sdk with `git clone https://github.com/raspberrypi/pico-sdk.git` to a known path
-3. Add the `PICO_SDK_PATH` to our environment variables with `export PICO_SDK_PATH=<the path to the pico-sdk>`
+3. Add the `PICO_SDK_PATH` to our environment variables with `export PICO_SDK_PATH="<the path to the pico-sdk>"`
