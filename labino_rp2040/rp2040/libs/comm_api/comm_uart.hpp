@@ -74,6 +74,7 @@ void comm_uart_interrupt_callback_wrapper(CommAPI_UART *api)
             api->_incoming_buffer[COMM_API_READ_BUFFER-1] = '\0';
             api->save_new_message(api->_incoming_buffer);
             api->_incoming_buffer_curr_index = 0;
+            break;
         }
     }
 }

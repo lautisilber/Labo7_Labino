@@ -2,6 +2,7 @@ add_library(comm_api STATIC
     comm_api.cpp comm_api.hpp
     comm_uart.hpp
     comm_basic.hpp
+    comm_stdio.hpp
 )
 
 target_link_libraries(
